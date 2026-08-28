@@ -1,0 +1,73 @@
+name: Lint & Typecheck
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  prerequisites:
+    name: Install Dependencies
+    runs-on: ubuntu-latest
+    outputs:
+      cache-key: deps-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: cd apps/api && npm ci
+      - run: cd apps/web && npm ci
+      - uses: actions/cache/save@v4
+        with:
+          path: |
+            node_modules
+            apps/api/node_modules
+            apps/web/node_modules
+          key: deps-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: prerequisites
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            apps/api/node_modules
+            apps/web/node_modules
+          key: deps-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+      - name: Lint API
+        run: cd apps/api && npx eslint "{src,test}/**/*.ts" --max-warnings 0
+      - name: Lint Web
+        run: cd apps/web && npx eslint . --max-warnings 0
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    needs: prerequisites
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            apps/api/node_modules
+            apps/web/node_modules
+          key: deps-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+      - name: Generate Prisma Client
+        run: cd apps/api && npx prisma generate --schema=../../prisma/schema.prisma
+      - name: Type Check API
+        run: cd apps/api && npx tsc --noEmit
+      - name: Type Check Web
+        run: cd apps/web && npx tsc --noEmit

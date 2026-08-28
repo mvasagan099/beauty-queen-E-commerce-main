@@ -1,0 +1,36 @@
+{
+  "name": "beauty-queen",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Beauty Queen E-commerce - Next.js + NestJS Monorepo",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd apps/api && npm run start:dev",
+    "dev:web": "cd apps/web && npm run dev",
+    "build": "npm run build:api && npm run build:web",
+    "build:api": "cd apps/api && npm run build",
+    "build:web": "cd apps/web && npm run build",
+    "start": "concurrently \"npm run start:api\" \"npm run start:web\"",
+    "start:api": "cd apps/api && npm run start:prod",
+    "start:web": "cd apps/web && npm run start",
+    "install:all": "cd apps/api && npm install && cd ../web && npm install",
+    "setup": "npm run install:all && npm run db:generate",
+    "db:generate": "cd apps/api && npx prisma generate",
+    "db:pull": "cd apps/api && npx prisma db pull",
+    "db:migrate": "cd apps/api && npx prisma migrate dev",
+    "db:studio": "cd apps/api && npx prisma studio",
+    "db:seed": "cd apps/api && node prisma/seed.js",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "lint": "cd apps/api && npm run lint && cd ../web && npm run lint",
+    "test": "cd apps/api && npm run test",
+    "test:e2e": "cd apps/api && npm run test:e2e"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "prisma": "^5.22.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  }
+}
