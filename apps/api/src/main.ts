@@ -84,16 +84,17 @@ async function bootstrap() {
     app.use('/image', express.static(legacyImageDir));
   }
 
-  // CORS - strict origin in production
+  // CORS - strict origin in production, expanded in development
   const allowedOrigins = nodeEnv === 'production'
-    ? [frontendUrl]
+    ? frontendUrl.split(',').map((u) => u.trim())
     : [frontendUrl, 'http://localhost:3000', 'http://127.0.0.1:3000'];
 
   app.enableCors({
     origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token', 'x-request-id', 'x-razorpay-signature'],
+    maxAge: nodeEnv === 'production' ? 86400 : undefined,
   });
 
   app.setGlobalPrefix('api');

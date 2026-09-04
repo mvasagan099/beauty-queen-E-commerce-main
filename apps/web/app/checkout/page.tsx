@@ -67,6 +67,7 @@ export default function CheckoutPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
@@ -235,6 +236,7 @@ export default function CheckoutPage() {
         <div className="lg:col-span-2 space-y-6">
           <CheckoutForm
             register={register}
+            setValue={setValue}
             errors={errors}
             paymentMethod={paymentMethod}
             onPaymentMethodChange={setPaymentMethod}

@@ -36,102 +36,112 @@ export class ScheduledJobsService {
    */
   @Cron('30 2 * * *')
   async processAbandonedCarts(): Promise<void> {
-    await this.redis.withLock('abandoned-carts', 60 * 29, async () => {
-      const now = Date.now();
+    try {
+      await this.redis.withLock('abandoned-carts', 60 * 29, async () => {
+        const now = Date.now();
 
-      const groups = await this.prisma.cartItem.groupBy({
-        by: ['userId'],
-        _min: { updatedAt: true },
-        _max: { updatedAt: true },
-      });
-
-      const candidates = groups.filter((g) => {
-        const lastActivity = g._max.updatedAt ? g._max.updatedAt.getTime() : null;
-        return lastActivity != null && lastActivity >= now - 3 * DAY_MS && lastActivity <= now - DAY_MS;
-      });
-
-      let sent = 0;
-      for (const group of candidates) {
-        const userId = group.userId;
-
-        if (!(await this.notifications.hasPromotionalConsent(userId))) {
-          continue;
-        }
-
-        const lastEmail = await this.prisma.abandonedCartEmail.findFirst({
-          where: { userId },
-          orderBy: { sentAt: 'desc' },
-          select: { sentAt: true },
-        });
-        if (lastEmail && now - lastEmail.sentAt.getTime() < 7 * DAY_MS) {
-          continue;
-        }
-
-        const items = await this.prisma.cartItem.findMany({
-          where: { userId },
-          include: { product: true },
-          orderBy: { updatedAt: 'desc' },
+        const groups = await this.prisma.cartItem.groupBy({
+          by: ['userId'],
+          _min: { updatedAt: true },
+          _max: { updatedAt: true },
         });
 
-        // Recommendation/marketing safety: only mention in-stock products.
-        const sellable = items.filter(
-          (item) => item.product && !item.product.deletedAt && this.alerts.hasStock(item.product),
-        );
-        if (sellable.length === 0) {
-          continue;
+        const candidates = groups.filter((g) => {
+          const lastActivity = g._max.updatedAt ? g._max.updatedAt.getTime() : null;
+          return lastActivity != null && lastActivity >= now - 3 * DAY_MS && lastActivity <= now - DAY_MS;
+        });
+
+        let sent = 0;
+        for (const group of candidates) {
+          try {
+            const userId = group.userId;
+
+            if (!(await this.notifications.hasPromotionalConsent(userId))) {
+              continue;
+            }
+
+            const lastEmail = await this.prisma.abandonedCartEmail.findFirst({
+              where: { userId },
+              orderBy: { sentAt: 'desc' },
+              select: { sentAt: true },
+            });
+            if (lastEmail && now - lastEmail.sentAt.getTime() < 7 * DAY_MS) {
+              continue;
+            }
+
+            const items = await this.prisma.cartItem.findMany({
+              where: { userId },
+              include: { product: true },
+              orderBy: { updatedAt: 'desc' },
+            });
+
+            const sellable = items.filter(
+              (item) => item.product && !item.product.deletedAt && this.alerts.hasStock(item.product),
+            );
+            if (sellable.length === 0) {
+              continue;
+            }
+
+            const user = await this.prisma.user.findUnique({ where: { id: userId } });
+            if (!user) {
+              continue;
+            }
+
+            const total = sellable.reduce((sum, item) => sum + (item.product.price || 0) * item.quantity, 0);
+            const cartUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/cart`;
+
+            const log = await this.prisma.abandonedCartEmail.create({ data: { userId } });
+
+            await this.notifications.notifyCartReminder(
+              {
+                userId,
+                email: user.email,
+                username: user.name || 'there',
+                items: sellable.map((item) => ({
+                  productName: item.product.name || 'Product',
+                  image: item.product.image,
+                  price: item.product.price || 0,
+                  quantity: item.quantity,
+                  size: item.size,
+                })),
+                total,
+                cartUrl,
+              },
+              log.id,
+            );
+
+            sent++;
+          } catch (err: any) {
+            this.logger.warn(`Failed to process abandoned cart for user ${group.userId}: ${err.message}`);
+          }
         }
 
-        const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        if (!user) {
-          continue;
+        if (sent > 0) {
+          this.logger.log(`Abandoned-cart run: ${sent} reminders queued from ${candidates.length} candidate carts`);
         }
-
-        const total = sellable.reduce((sum, item) => sum + (item.product.price || 0) * item.quantity, 0);
-        const cartUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/cart`;
-
-        const log = await this.prisma.abandonedCartEmail.create({ data: { userId } });
-
-        await this.notifications.notifyCartReminder(
-          {
-            userId,
-            email: user.email,
-            username: user.name || 'there',
-            items: sellable.map((item) => ({
-              productName: item.product.name || 'Product',
-              image: item.product.image,
-              price: item.product.price || 0,
-              quantity: item.quantity,
-              size: item.size,
-            })),
-            total,
-            cartUrl,
-          },
-          log.id,
-        );
-
-        sent++;
-        this.logger.log(`Abandoned-cart reminder queued for user ${userId} (${sellable.length} items)`);
-      }
-
-      if (sent > 0) {
-        this.logger.log(`Abandoned-cart run: ${sent} reminders queued from ${candidates.length} candidate carts`);
-      }
-    });
+      });
+    } catch (err: any) {
+      this.logger.error(`Abandoned-cart job failed: ${err.message}`);
+    }
   }
 
   /** Deactivate coupons that have expired; idempotent because only active rows change. */
   @Cron('30 0 * * *')
   async deactivateExpiredCoupons(): Promise<void> {
-    await this.redis.withLock('expired-coupons', 60 * 29, async () => {
-      const now = new Date();
-      const result = await this.prisma.coupon.updateMany({
-        where: { active: true, expiresAt: { lt: now } },
-        data: { active: false },
-      });
+    try {
+      await this.redis.withLock('expired-coupons', 60 * 29, async () => {
+        const now = new Date();
+        const result = await this.prisma.coupon.updateMany({
+          where: { active: true, expiresAt: { lt: now } },
+          data: { active: false },
+        });
 
-      if (result.count > 0) {
-        this.logger.log(`Deactivated ${result.count} expired coupon(s)`);
-      }
-    });
+        if (result.count > 0) {
+          this.logger.log(`Deactivated ${result.count} expired coupon(s)`);
+        }
+      });
+    } catch (err: any) {
+      this.logger.error(`Expired-coupons job failed: ${err.message}`);
+    }
   }
 }

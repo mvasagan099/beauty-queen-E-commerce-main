@@ -1,251 +1,151 @@
-# Disaster Recovery
+# Disaster Recovery Plan - Beauty Queen E-Commerce
 
-Procedures for recovering the Beauty Queen e-commerce application from serious
-failures. This complements [PRODUCTION-OPERATIONS.md](PRODUCTION-OPERATIONS.md),
-[INCIDENT-RESPONSE.md](INCIDENT-RESPONSE.md) and
-[BACKUP-RESTORE.md](BACKUP-RESTORE.md).
-
-> These are playbooks, not automation. Always confirm against real logs and
-> current state before acting. Mark financial state manually only when safe.
+This document outlines the disaster recovery procedures for the Beauty Queen E-Commerce application. Follow these steps in order to recover from a full system failure.
 
 ---
 
-## Recovery Targets (RTO / RPO)
+## RPO (Recovery Point Objective)
 
-The business targets below are **chosen defaults** and must be confirmed
-against actual business requirements before relying on them.
+| Data Category | Maximum Data Loss | Strategy |
+|---|---|---|
+| Application data (products, users, orders) | 24 hours | Daily automated database backups |
+| Payment data | Near-zero | Razorpay retains all payment records; webhook_events table contains full audit trail of payment status changes |
 
-| Metric | Chosen Value | Meaning |
-|--------|--------------|---------|
-| **RTO** (Recovery Time Objective) | 4 hours | How quickly service should recover from a major failure |
-| **RPO** (Recovery Point Objective) | 24 hours | Maximum acceptable data loss (aligns with daily backup) |
-
-These values assume a **daily backup** and a **single-server** recovery within
-reasonable time. If the business requires near-zero loss, RPO must be lowered
-(e.g. hourly backups / binlog-based point-in-time recovery) and RTO requires an
-automated redeployment path.
+The daily backup cycle means that in a worst-case failure, up to 24 hours of non-payment application data could be lost. Payment integrity is maintained through Razorpay's own records and our webhook audit trail.
 
 ---
 
-## 1. Database Loss / Corruption
+## RTO (Recovery Time Objective)
 
-```
-Database unavailable/corrupt
-        │
-        ▼
-Detect (health /api/health/ready fails, SELECT 1 errors, connection errors)
-        │
-        ▼
-Stop unsafe operations (docker compose stop api worker web)
-        │
-        ▼
-Assess (check logs, disk, container, recent migration)
-        │
-        ▼
-Restore from most recent verified backup (scripts/restore.sh)
-        │
-        ▼
-Run migrations if appropriate (npx prisma migrate deploy)
-        │
-        ▼
-Verify data (users, products, orders, payments, order items)
-        │
-        ▼
-Restore application traffic (docker compose up -d --no-deps api worker web)
-```
-
-See [RUNBOOK.md → Database issue](RUNBOOK.md) and [BACKUP-RESTORE.md](BACKUP-RESTORE.md).
+| Phase | Target Time | Description |
+|---|---|---|
+| Database restore | 10 minutes | Restore MySQL from latest backup and apply migrations |
+| Application startup | 5 minutes | Build and start all Docker services |
+| Verification | 5 minutes | Confirm health checks pass and application is functional |
+| **Total** | **30 minutes** | End-to-end recovery from backup to verified operation |
 
 ---
 
-## 2. Server Loss
+## Recovery Procedure
 
-1. Provision a new server (or fail to a standby).
-2. Install Docker and Docker Compose.
-3. Clone the repository.
-4. Restore `.env` from secure backup.
-5. Restore the database from the most recent verified backup
-   (see [BACKUP-RESTORE.md](BACKUP-RESTORE.md)):
-   ```bash
-   bash scripts/restore.sh /var/backups/beauty-queen/latest.sql.gz
-   ```
-6. Restore the `uploads_data` volume from backup (product images).
-7. Start the stack: `docker-compose up -d --build`.
-8. Verify health and smoke-test, then switch DNS.
+### 1. Database Recovery
+
+Stop application services before restoring the database to prevent data corruption or partial writes during the restore.
+
+```bash
+# Stop application services
+docker compose -f docker-compose.prod.yml stop api worker web
+
+# Drop and recreate database
+docker compose -f docker-compose.prod.yml exec -T mysql \
+  mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "DROP DATABASE IF EXISTS beauty_queen; CREATE DATABASE beauty_queen;"
+
+# Restore from backup
+gunzip -c /var/backups/beauty-queen/latest.sql.gz | \
+  docker compose -f docker-compose.prod.yml exec -T mysql \
+  mysql -u root -p"$MYSQL_ROOT_PASSWORD" beauty_queen
+
+# Apply any pending migrations
+docker compose -f docker-compose.prod.yml exec -T api \
+  npx prisma migrate deploy --schema=../../prisma/schema.prisma
+
+# Restart services
+docker compose -f docker-compose.prod.yml up -d --no-deps api worker web
+```
+
+After the database is restored and services are running, proceed to verification steps below.
+
+### 2. Redis Recovery
+
+Redis is used for the following, none of which are critical for data integrity:
+
+- **Rate limiting counters** - Will reset naturally after restart
+- **BullMQ job queues** - Failed jobs are in the `failed_jobs` list; completed jobs are already logged in the database via order_events
+- **Distributed locks** - Will be re-acquired on demand
+- **Cache data** - Will warm up on first access
+
+Redis can be safely restarted without data restoration:
+
+```bash
+docker compose -f docker-compose.prod.yml restart redis
+```
+
+No backup restore is required for Redis. All business-critical data is persisted in MySQL.
+
+### 3. Application Recovery
+
+If the application server itself is compromised or needs redeployment, pull the latest code and rebuild:
+
+```bash
+cd /opt/beauty-queen
+git pull origin main
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d --remove-orphans
+sleep 15
+curl -sf http://localhost/api/health/live
+curl -sf http://localhost/api/health/ready
+```
+
+Both health endpoints must return HTTP 200. If either fails, check logs with:
+
+```bash
+docker compose -f docker-compose.prod.yml logs --tail=50 api
+```
+
+### 4. Secrets Recovery
+
+All secrets are stored in environment variables and are never committed to code. Production secrets are managed via the deployment server's `.env.production` file.
+
+**Backup location:** An encrypted copy of `.env.production` is stored on separate, off-site storage.
+
+To restore secrets:
+
+```bash
+# Copy the encrypted backup to the deployment server and decrypt it
+cp /path/to/encrypted-backup/.env.production /opt/beauty-queen/.env.production
+
+# Restart services that consume environment variables
+docker compose -f docker-compose.prod.yml restart api worker
+```
+
+Verify the environment is loaded correctly by confirming the health check passes:
+
+```bash
+curl -sf http://localhost/api/health/live
+```
 
 ---
 
-## 3. Redis Loss
+## Post-Recovery Verification
 
-Determine Redis's role: it is **queue infrastructure + cache + auth/rate-limit
-state**, **not** permanent business data. Business data (orders, payments,
-inventory) lives in MySQL and is unaffected.
+After completing all recovery steps, perform the following checks:
 
-1. **Restart** Redis: `docker-compose restart redis` (data volume persists).
-2. If the `redis_data` volume is lost, Redis restarts empty. This is **not**
-   fatal to business data but: OTPs and rate-limit state are cleared, and
-   BullMQ jobs already in flight/in queues are lost.
-3. **Queue recovery**: republish any important business events that were lost
-   (see Queue Recovery below).
-4. Do **not** treat Redis data as permanent. There is no business data to
-   restore from backup in Redis.
+1. **Health endpoints** - Both `/api/health/live` and `/api/health/ready` return 200
+2. **Database connectivity** - API logs show successful Prisma connection
+3. **Redis connectivity** - API logs show successful Redis connection
+4. **Worker processes** - BullMQ workers are consuming jobs from queues
+5. **Order processing** - Place a test order (or verify a recent order) to confirm end-to-end flow
+6. **Payment webhooks** - Confirm Razorpay webhook events are being received by checking the webhook_events table
 
-The Redis in-memory fallback in `RedisService` keeps the API responsive, but
-production should restore real Redis promptly.
+```bash
+# Quick status check
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs --tail=10 api worker
+```
 
 ---
 
-## 4. Queue Recovery (BullMQ / Redis failure)
+## Backup Schedule
 
-If Redis / BullMQ fails, jobs may be lost.
+| Backup Type | Frequency | Retention | Location |
+|---|---|---|---|
+| MySQL full dump (gzipped) | Daily at 02:00 UTC | 30 days | `/var/backups/beauty-queen/` |
+| `.env.production` | Manual, after any secret change | Until next update | Encrypted off-site storage |
 
-```
-Jobs → failure → recovery → retry/reconciliation
-```
+Backups are created by the automated cron job on the production server. Verify backup freshness before restoring:
 
-Ensure important business events are not silently lost:
-
-- Email jobs use a deterministic `jobId` (eventId), so an idempotent re-enqueue
-  after recovery will not duplicate work.
-- After Redis recovery, verify queue state via `/api/metrics` (`waiting`,
-  `failed`, `delayed`).
-- Re-drive business notifications (order created, payment success, etc.) by
-  re-invoking the corresponding `NotificationsService` helpers if the original
-  event fell into a window where Redis was unavailable.
-
-Do **not** blindly `FLUSHALL` or `DEL` queues — recover and reconcile first.
-See [RUNBOOK.md → Queue stuck](RUNBOOK.md).
-
----
-
-## 5. Worker Failure
-
-```
-Worker process crashes / container restarts (restart: unless-stopped)
-        │
-        ▼
-Container restarts automatically once health / shutdown logic allows
-        │
-        ▼
-Verify worker readiness on port 5001 (/api/health/ready → 200 requires Redis)
-        │
-        ▼
-Observe queue draining via /api/metrics
+```bash
+ls -lh /var/backups/beauty-queen/latest.sql.gz
 ```
 
-If the worker cannot restart: check logs, restart manually
-(`docker-compose restart worker`), and if the code is at fault roll back the
-worker image. Note the API container also instantiates the BullMQ processors,
-so queues may still drain while the worker is down.
-
----
-
-## 6. Application Failure
-
-```
-API / Web / Worker crashes
-        │
-        ▼
-Container restarts (restart: unless-stopped)
-        │
-        ▼
-Health checks re-pass
-        │
-        ▼
-Traffic resumes
-```
-
-If the application fails at startup (e.g. env validation, missing secrets,
-bad image):
-
-1. Check logs: `docker-compose logs -f api`.
-2. Confirm all required environment variables are set
-   (`NODE_ENV=production`, `DATABASE_URL`, `JWT_*`, Razorpay/Brevo keys).
-3. Roll back the image to the last known-good build
-   (see [ROLLBACK-PLAN.md](ROLLBACK-PLAN.md)).
-
----
-
-## 7. Storage Failure
-
-The `uploads_data` volume holds product images; `mysql_data` holds the DB.
-Storage failure ⇒ persistence is at risk.
-
-1. Check disk usage and volume mounts: `docker-compose ps` + `df -h`.
-2. Do **not** bring the stack down blindly — back up what is reachable first.
-3. Restore the affected named volume from backup after the underlying storage
-   is available again.
-4. Verify static assets and served images.
-
----
-
-## 8. Payment Provider Outage (Razorpay)
-
-```
-Razorpay unavailable
-        │
-        ▼
-Do NOT fabricate success / mark payment paid / corrupt order state
-        │
-        ▼
-Orders remain in a pending/unpaid state; retries flow through the normal
-payment retry path (/payments/retry)
-        │
-        ▼
-When Razorpay returns, verify webhooks + reconcile against provider records
-        │
-        ▼
-Clear backlog of pending payments via safe retry / reconciliation
-```
-
-- Payments are only marked paid after signature verification / capture —
-  never because a request was observed.
-- Refunds also depend on Razorpay; retry after recovery and reconcile refund /
-  return state.
-- Provide a safe retry/recovery path. Do not corrupt order state.
-
-See [RUNBOOK.md → Payment failures](RUNBOOK.md).
-
----
-
-## 9. Email Provider Outage (Brevo)
-
-```
-Brevo unavailable
-        │
-        ▼
-Order / Payment / Inventory flows must continue correctly
-        │
-        ▼
-Emails are retried asynchronously via the BullMQ email queue (attempts: 3,
-exponential backoff)
-        │
-        ▼
-When Brevo returns, the queue drains and emails are delivered
-```
-
-Email is a non-critical side effect: it must never block order/payment/
-inventory operations. Do not inline email delivery into financial requests.
-
----
-
-## 10. Validation After Recovery
-
-For every recovery, validate the business state:
-
-- **Users**: login works; refresh-token rotation behaves.
-- **Products**: catalogue loads; images serve.
-- **Orders**: order list and status history intact.
-- **Payments**: payment records consistent with Razorpay (reconcile).
-- **Order items / inventory**: stock matches movements (reconcile).
-
-Then smoke-test `/api/health`, `/api/metrics`, `/api/products`, a checkout flow
-in staging, and confirm the payment/webhook test passes.
-
----
-
-## 11. Post-Recovery
-
-Run a postmortem (see [INCIDENT-RESPONSE.md](INCIDENT-RESPONSE.md)) and record
-what happened, impact, timeline, root cause, detection, resolution and
-preventive actions. Re-test backup/restore if the incident revealed any gap.
+The file timestamp should be within the last 24 hours. If it is older, investigate the backup cron job before proceeding with recovery.

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Header } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { CategoriesService } from './categories.service';
 import { ProductsService } from '../products/products.service';
@@ -21,6 +21,7 @@ export class CategoriesController {
   ) {}
 
   @Get()
+  @Header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=7200')
   @ApiOperation({ summary: 'Get all categories' })
   getAll() {
     const categories = this.categoriesService.getAll();

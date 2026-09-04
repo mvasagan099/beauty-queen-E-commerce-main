@@ -82,7 +82,7 @@ export class SellersService {
     });
 
     this.logger.log(`Seller logged in: ${dto.mobile}`);
-    const { password, ...sellerSafe } = seller;
+    const { password: _pw, ...sellerSafe } = seller;
     return { success: true, accessToken, refreshToken, seller: sellerSafe };
   }
 
@@ -335,12 +335,6 @@ export class SellersService {
     return order;
   }
 
-  private readonly VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
-    Pending: ['Processing', 'Cancelled'],
-    Processing: ['Shipped', 'Cancelled'],
-    Shipped: ['Delivered'],
-  };
-
   async updateOrderStatus(sellerId: number, orderId: number, newStatus: string) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, sellerId },
@@ -349,17 +343,32 @@ export class SellersService {
       throw new NotFoundException('Order not found or access denied');
     }
 
-    const allowedTransitions = this.VALID_STATUS_TRANSITIONS[order.status];
-    if (!allowedTransitions || !allowedTransitions.includes(newStatus)) {
+    const { OrderStatus } = require('@prisma/client');
+    const validStatus = OrderStatus[newStatus as keyof typeof OrderStatus];
+    if (!validStatus) {
+      throw new ConflictException(`Invalid status: ${newStatus}`);
+    }
+
+    const sellerAllowed: Record<string, string[]> = {
+      [OrderStatus.Processing]: [OrderStatus.Shipped, OrderStatus.Cancelled],
+      [OrderStatus.Shipped]: [OrderStatus.Delivered],
+    };
+    const allowed = sellerAllowed[order.status];
+    if (!allowed || !allowed.includes(validStatus)) {
       throw new ConflictException(
-        `Cannot transition from ${order.status} to ${newStatus}. Allowed: ${allowedTransitions?.join(', ') || 'none'}`,
+        `Seller cannot transition from ${order.status} to ${newStatus}. Allowed: ${allowed?.join(', ') || 'none'}`,
       );
+    }
+
+    if (order.status === validStatus) {
+      this.logger.log(`Order ${orderId} already in ${newStatus} (no-op)`);
+      return { success: true, message: 'Order already in this status', order };
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const updatedOrder = await tx.order.update({
         where: { id: orderId },
-        data: { status: newStatus as any },
+        data: { status: validStatus },
         include: { product: true },
       });
 
@@ -367,7 +376,7 @@ export class SellersService {
         data: {
           orderId,
           oldStatus: order.status,
-          newStatus,
+          newStatus: validStatus,
           changedBy: sellerId,
         },
       });
@@ -383,7 +392,7 @@ export class SellersService {
       username: updated.username || 'Customer',
       productName: updated.name || 'Product',
       oldStatus: order.status,
-      newStatus,
+      newStatus: validStatus,
       carrier: updated.carrier || undefined,
       trackingNumber: updated.trackingNumber || undefined,
       trackingUrl: updated.trackingUrl || undefined,
@@ -395,7 +404,7 @@ export class SellersService {
       entityId: orderId,
       actorId: sellerId,
       actorRole: 'SELLER',
-      details: { oldStatus: order.status, newStatus },
+      details: { oldStatus: order.status, newStatus: validStatus },
     });
 
     return { success: true, message: 'Order status updated', order: updated };

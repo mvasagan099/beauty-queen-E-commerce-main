@@ -1,7 +1,7 @@
 import {
   Controller, Get, Post, Patch, Delete, Param, Query, Body,
   UseGuards, ParseIntPipe, UseInterceptors, UploadedFiles,
-  BadRequestException, Req,
+  BadRequestException, Req, Header,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
@@ -27,6 +27,7 @@ export class ProductsController {
   ) {}
 
   @Get()
+  @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300')
   @ApiOperation({ summary: 'Get all products with filtering and pagination' })
   @ApiQuery({ name: 'category', required: false })
   @ApiQuery({ name: 'sort', required: false })
@@ -77,6 +78,7 @@ export class ProductsController {
   }
 
   @Get('homepage')
+  @Header('Cache-Control', 'public, max-age=120, stale-while-revalidate=600')
   @ApiOperation({ summary: 'Get homepage data' })
   async getHomepage() {
     const data = await this.productsService.getHomepageData();
@@ -119,6 +121,7 @@ export class ProductsController {
   }
 
   @Get(':id/related')
+  @Header('Cache-Control', 'public, max-age=300, stale-while-revalidate=900')
   @ApiOperation({ summary: 'Get related products for a product' })
   @ApiQuery({ name: 'limit', required: false, description: 'Number of related products (max 12)' })
   async related(
@@ -131,6 +134,7 @@ export class ProductsController {
   }
 
   @Get(':id/frequently-bought-together')
+  @Header('Cache-Control', 'public, max-age=300, stale-while-revalidate=900')
   @ApiOperation({ summary: 'Get products frequently bought together with a product' })
   @ApiQuery({ name: 'limit', required: false, description: 'Number of recommendations (max 12)' })
   async frequentlyBoughtTogether(
@@ -143,6 +147,7 @@ export class ProductsController {
   }
 
   @Get(':id')
+  @Header('Cache-Control', 'public, max-age=300, stale-while-revalidate=900')
   @ApiOperation({ summary: 'Get product by ID' })
   async findOne(@Param('id', ParseIntPipe) id: number) {
     const result = await this.productsService.findById(id);

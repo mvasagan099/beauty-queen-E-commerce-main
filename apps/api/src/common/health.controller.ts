@@ -14,8 +14,7 @@ export class HealthController {
   ) {}
 
   @Get()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Health check endpoint' })
+  @ApiOperation({ summary: 'Full health check' })
   async check() {
     const checks = await Promise.allSettled([
       this.checkDatabase(),
@@ -43,14 +42,14 @@ export class HealthController {
 
   @Get('live')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Liveness probe' })
+  @ApiOperation({ summary: 'Liveness probe - is the process alive?' })
   live() {
     return { status: 'ok' };
   }
 
   @Get('ready')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Readiness probe' })
+  @ApiOperation({ summary: 'Readiness probe - can the service handle traffic?' })
   async ready() {
     try {
       await this.prisma.$queryRaw`SELECT 1`;

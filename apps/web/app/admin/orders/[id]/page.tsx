@@ -8,6 +8,8 @@ import { formatPrice, getProductImageUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { paymentsApi } from "@/lib/api";
+import { toast } from "sonner";
 import { useState } from "react";
 
 const statusColors: Record<string, string> = {
@@ -48,6 +50,10 @@ export default function AdminOrderDetailPage() {
   const [statusNote, setStatusNote] = useState("");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [pendingStatus, setPendingStatus] = useState("");
+  const [showRefundDialog, setShowRefundDialog] = useState(false);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [isRefunding, setIsRefunding] = useState(false);
 
   const { data, isLoading, error } = useAdminOrder(orderId);
   const updateStatus = useUpdateAdminOrderStatus();
@@ -79,6 +85,25 @@ export default function AdminOrderDetailPage() {
         },
       }
     );
+  };
+
+  const handleInitiateRefund = async () => {
+    if (!order.paymentId || !refundAmount) return;
+    setIsRefunding(true);
+    try {
+      await paymentsApi.refund(order.paymentId, {
+        amount: Number(refundAmount),
+        reason: refundReason || undefined,
+      });
+      toast.success("Refund initiated successfully");
+      setShowRefundDialog(false);
+      setRefundAmount("");
+      setRefundReason("");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to initiate refund");
+    } finally {
+      setIsRefunding(false);
+    }
   };
 
   if (isLoading) {
@@ -289,6 +314,30 @@ export default function AdminOrderDetailPage() {
               />
             </CardContent>
           </Card>
+
+          {/* Refund Action */}
+          {order.paymentId && order.paymentStatus !== "REFUNDED" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Refund</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 mb-3">
+                  Initiate a refund for this order&apos;s payment.
+                </p>
+                <Button
+                  variant="outline"
+                  className="w-full border-orange-300 text-orange-600 hover:bg-orange-50"
+                  onClick={() => {
+                    setRefundAmount(String(subtotal));
+                    setShowRefundDialog(true);
+                  }}
+                >
+                  Initiate Refund
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -304,6 +353,67 @@ export default function AdminOrderDetailPage() {
         isLoading={updateStatus.isPending}
         onConfirm={confirmStatusChange}
       />
+
+      {/* Refund Dialog */}
+      {showRefundDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Initiate Refund</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Payment ID: <span className="font-mono">{order.paymentId}</span>
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Refund Amount (₹)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={subtotal}
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  placeholder="Enter refund amount"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reason (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  placeholder="Enter refund reason"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <Button
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                onClick={handleInitiateRefund}
+                disabled={isRefunding || !refundAmount || Number(refundAmount) <= 0}
+              >
+                {isRefunding ? "Processing..." : "Confirm Refund"}
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowRefundDialog(false);
+                  setRefundAmount("");
+                  setRefundReason("");
+                }}
+                disabled={isRefunding}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

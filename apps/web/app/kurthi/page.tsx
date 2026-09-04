@@ -1,6 +1,8 @@
 import { Metadata } from "next";
 import CategoryPage from "@/app/category-layout";
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
 export const metadata: Metadata = {
   title: "Kurthi Collection",
   description:
@@ -8,6 +10,9 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Kurthi Collection | Beauty Queen",
     description: "Explore our beautiful range of kurtis for everyday elegance.",
+  },
+  alternates: {
+    canonical: `${SITE_URL}/kurthi`,
   },
 };
 

@@ -13,6 +13,7 @@ import {
   RazorpayCheckout,
   RazorpayCheckoutHandle,
 } from "@/components/payment/RazorpayCheckout";
+import { XCircle, RotateCcw, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 
 export default function PaymentFailurePage() {
   const searchParams = useSearchParams();
@@ -69,61 +70,61 @@ export default function PaymentFailurePage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 px-4 py-8">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 px-4 py-12">
       <RazorpayCheckout
         ref={razorpayRef}
         onSuccess={handlePaymentSuccess}
         onFailure={handlePaymentFailure}
       />
-      <div className="h-20 w-20 rounded-full bg-red-100 flex items-center justify-center">
-        <svg
-          className="h-10 w-10 text-red-500"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M6 18L18 6M6 6l12 12"
-          />
-        </svg>
+      <div className="h-20 w-20 rounded-full bg-destructive/10 flex items-center justify-center">
+        <XCircle className="h-10 w-10 text-destructive" />
       </div>
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <h1 className="text-3xl font-bold text-foreground mb-2">
           Payment Failed
         </h1>
-        <p className="text-gray-500 max-w-md">{error}.</p>
+        <p className="text-muted-foreground max-w-md">{error}. No amount has been charged.</p>
       </div>
 
       {checkoutId && <PaymentStatusCard checkoutId={checkoutId} />}
 
       <Card className="w-full max-w-md">
-        <CardContent className="pt-6 space-y-3">
-          <p className="text-xs text-gray-400">
-            No amount has been charged unless the payment was already confirmed.
-            Your cart items are still reserved while this checkout remains open.
-            You can retry the payment below.
-          </p>
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-muted-foreground leading-relaxed">
+              <p>
+                Your cart items are still reserved. You can retry the payment
+                below or return to checkout to make changes.
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         {checkoutId && (
           <Button
-            className="bg-pink-500 hover:bg-pink-600 text-white"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
             disabled={retrying}
             onClick={() => retryMutation.mutate()}
           >
-            {retrying ? "Retrying..." : "Retry Payment"}
+            {retrying ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Retrying...
+              </>
+            ) : (
+              <>
+                <RotateCcw className="h-4 w-4" />
+                Retry Payment
+              </>
+            )}
           </Button>
         )}
         <Link href="/checkout">
-          <Button
-            variant="outline"
-            className="border-pink-500 text-pink-500 hover:bg-pink-500 hover:text-white"
-          >
+          <Button variant="outline" className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
             Back to Checkout
           </Button>
         </Link>

@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { useCheckoutStore } from "@/store";
 import { CartList } from "@/components/cart/CartList";
 import { CartSummary } from "@/components/cart/CartSummary";
+import { LoadingPage } from "@/components/ui/spinner";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ShoppingCart } from "lucide-react";
 
 export default function CartPage() {
   const router = useRouter();
@@ -32,11 +35,7 @@ export default function CartPage() {
   });
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-pink-500 border-t-transparent" />
-      </div>
-    );
+    return <LoadingPage text="Loading your cart..." />;
   }
 
   const cart = data?.data;
@@ -44,20 +43,24 @@ export default function CartPage() {
   const updating = removeMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Shopping Cart</h1>
+    <div className="page-container">
+      <h1 className="page-title">Shopping Cart</h1>
 
       {items.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 min-h-[40vh] justify-center">
-          <p className="text-gray-500">Your cart is empty.</p>
-          <Link href="/">
-            <Button className="bg-pink-500 hover:bg-pink-600 text-white">
-              Continue Shopping
-            </Button>
-          </Link>
-        </div>
+        <EmptyState
+          icon={<ShoppingCart className="h-8 w-8" />}
+          title="Your cart is empty"
+          description="Looks like you haven't added anything to your cart yet. Browse our collections to find something you love."
+          action={
+            <Link href="/">
+              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                Continue Shopping
+              </Button>
+            </Link>
+          }
+        />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           <div className="lg:col-span-2 space-y-4">
             <CartList
               items={items}

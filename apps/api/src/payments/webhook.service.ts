@@ -255,6 +255,8 @@ export class WebhookService {
       }
     });
 
+    this.logger.log(`Webhook captured: ${pendingOrders.length} orders confirmed for checkout ${payment.checkoutId}`);
+
     for (const order of pendingOrders) {
       await this.notifications.notifyPaymentSuccess({
         id: order.id,

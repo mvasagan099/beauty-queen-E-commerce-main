@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface PaginationProps {
   currentPage: number;
@@ -37,26 +38,27 @@ export function Pagination({ currentPage, totalPages, baseUrl, params = {} }: Pa
   }
 
   return (
-    <div className="flex items-center justify-center gap-1 mt-8">
+    <nav aria-label="Pagination" className="flex items-center justify-center gap-1">
       {currentPage > 1 && (
-        <Link href={buildUrl(currentPage - 1)}>
-          <Button variant="outline" size="sm">
-            Prev
+        <Link href={buildUrl(currentPage - 1)} aria-label="Previous page">
+          <Button variant="outline" size="sm" className="gap-1">
+            <ChevronLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Prev</span>
           </Button>
         </Link>
       )}
 
       {pages.map((page, i) =>
         page === "..." ? (
-          <span key={`dots-${i}`} className="px-2 text-gray-400">
+          <span key={`dots-${i}`} className="px-2 text-muted-foreground">
             ...
           </span>
         ) : (
-          <Link key={page} href={buildUrl(page)}>
+          <Link key={page} href={buildUrl(page)} aria-label={`Page ${page}`} aria-current={page === currentPage ? "page" : undefined}>
             <Button
               variant={page === currentPage ? "default" : "outline"}
               size="sm"
-              className={page === currentPage ? "bg-pink-500 hover:bg-pink-600" : ""}
+              className={page === currentPage ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}
             >
               {page}
             </Button>
@@ -65,12 +67,13 @@ export function Pagination({ currentPage, totalPages, baseUrl, params = {} }: Pa
       )}
 
       {currentPage < totalPages && (
-        <Link href={buildUrl(currentPage + 1)}>
-          <Button variant="outline" size="sm">
-            Next
+        <Link href={buildUrl(currentPage + 1)} aria-label="Next page">
+          <Button variant="outline" size="sm" className="gap-1">
+            <span className="hidden sm:inline">Next</span>
+            <ChevronRight className="h-4 w-4" />
           </Button>
         </Link>
       )}
-    </div>
+    </nav>
   );
 }

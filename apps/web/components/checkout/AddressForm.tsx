@@ -24,7 +24,7 @@ export function AddressForm({ register, errors }: AddressFormProps) {
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="name">Full Name</Label>
+          <Label htmlFor="name">Full Name <span className="text-destructive">*</span></Label>
           <Input
             id="name"
             {...register("name")}
@@ -33,95 +33,83 @@ export function AddressForm({ register, errors }: AddressFormProps) {
             aria-describedby={errors.name ? "name-error" : undefined}
           />
           {errors.name && (
-            <p id="name-error" className="text-sm text-red-500">
-              {errors.name.message}
-            </p>
+            <p id="name-error" className="text-sm text-destructive">{errors.name.message}</p>
           )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">Email <span className="text-destructive">*</span></Label>
           <Input
             id="email"
             type="email"
             {...register("email")}
-            placeholder="Enter email"
+            placeholder="you@example.com"
             aria-invalid={!!errors.email}
             aria-describedby={errors.email ? "email-error" : undefined}
           />
           {errors.email && (
-            <p id="email-error" className="text-sm text-red-500">
-              {errors.email.message}
-            </p>
+            <p id="email-error" className="text-sm text-destructive">{errors.email.message}</p>
           )}
         </div>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="phone">Phone</Label>
+        <Label htmlFor="phone">Phone Number <span className="text-destructive">*</span></Label>
         <Input
           id="phone"
           {...register("phone")}
-          placeholder="Enter phone number"
+          placeholder="10-digit mobile number"
           aria-invalid={!!errors.phone}
           aria-describedby={errors.phone ? "phone-error" : undefined}
         />
         {errors.phone && (
-          <p id="phone-error" className="text-sm text-red-500">
-            {errors.phone.message}
-          </p>
+          <p id="phone-error" className="text-sm text-destructive">{errors.phone.message}</p>
         )}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="address">Address</Label>
+        <Label htmlFor="address">Delivery Address <span className="text-destructive">*</span></Label>
         <Input
           id="address"
           {...register("address")}
-          placeholder="Enter full address"
+          placeholder="House no., street, area, city"
           aria-invalid={!!errors.address}
           aria-describedby={errors.address ? "address-error" : undefined}
         />
         {errors.address && (
-          <p id="address-error" className="text-sm text-red-500">
-            {errors.address.message}
-          </p>
+          <p id="address-error" className="text-sm text-destructive">{errors.address.message}</p>
         )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="pincode">Pincode</Label>
+          <Label htmlFor="pincode">Pincode <span className="text-destructive">*</span></Label>
           <Input
             id="pincode"
             inputMode="numeric"
             maxLength={6}
             {...register("pincode")}
-            placeholder="Enter 6-digit pincode"
+            placeholder="6-digit pincode"
             aria-invalid={!!errors.pincode}
             aria-describedby={errors.pincode ? "pincode-error" : undefined}
           />
           {errors.pincode && (
-            <p id="pincode-error" className="text-sm text-red-500">
-              {errors.pincode.message}
-            </p>
+            <p id="pincode-error" className="text-sm text-destructive">{errors.pincode.message}</p>
           )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="district">District</Label>
+          <Label htmlFor="district">District <span className="text-destructive">*</span></Label>
           <Input
             id="district"
             {...register("district")}
-            placeholder="Enter district"
+            placeholder="District / City"
             aria-invalid={!!errors.district}
             aria-describedby={errors.district ? "district-error" : undefined}
           />
           {errors.district && (
-            <p id="district-error" className="text-sm text-red-500">
-              {errors.district.message}
-            </p>
+            <p id="district-error" className="text-sm text-destructive">{errors.district.message}</p>
           )}
         </div>
       </div>
       <div className="space-y-2">
         <Label htmlFor="landmark">Landmark (Optional)</Label>
-        <Input id="landmark" {...register("landmark")} placeholder="Enter landmark" />
+        <Input id="landmark" {...register("landmark")} placeholder="Nearby landmark (optional)" />
       </div>
     </div>
   );

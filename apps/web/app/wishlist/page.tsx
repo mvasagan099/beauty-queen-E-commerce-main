@@ -6,8 +6,10 @@ import { wishlistApi } from "@/lib/api";
 import { WishlistItem } from "@/types";
 import { ProductCard } from "@/components/product/product-card";
 import { Button } from "@/components/ui/button";
+import { LoadingPage } from "@/components/ui/spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { toast } from "sonner";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Heart } from "lucide-react";
 import Link from "next/link";
 
 interface WishlistResponse {
@@ -45,23 +47,19 @@ export default function WishlistPage() {
   });
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-pink-500 border-t-transparent" />
-      </div>
-    );
+    return <LoadingPage text="Loading your wishlist..." />;
   }
 
   const items = data?.items || [];
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="page-container">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">My Wishlist</h1>
+        <h1 className="page-title mb-0">My Wishlist</h1>
         {items.length > 0 && (
           <Button
             variant="outline"
-            className="text-red-600 border-red-600 hover:bg-red-50"
+            className="text-destructive border-destructive/30 hover:bg-destructive hover:text-destructive-foreground"
             onClick={() => {
               if (confirm("Clear entire wishlist?")) {
                 clearMutation.mutate();
@@ -74,23 +72,28 @@ export default function WishlistPage() {
       </div>
 
       {items.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 min-h-[40vh] justify-center">
-          <p className="text-gray-500">Your wishlist is empty.</p>
-          <Link href="/">
-            <Button className="bg-pink-500 hover:bg-pink-600 text-white">
-              Browse Products
-            </Button>
-          </Link>
-        </div>
+        <EmptyState
+          icon={<Heart className="h-8 w-8" />}
+          title="Your wishlist is empty"
+          description="Save items you love to your wishlist and come back to them anytime."
+          action={
+            <Link href="/">
+              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+                Browse Products
+                <ShoppingCart className="h-4 w-4" />
+              </Button>
+            </Link>
+          }
+        />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
           {items
             .filter((item) => item.product && typeof item.product === "object")
             .map((item) => (
               <div key={item.id} className="flex flex-col">
                 <ProductCard product={item.product} />
                 <Button
-                  className="mt-2 w-full h-9 bg-pink-500 hover:bg-pink-600 text-white text-xs"
+                  className="mt-2 w-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-9"
                   disabled={movingId === item.product.id}
                   onClick={() => moveMutation.mutate(item.product.id)}
                   title="Move to cart"

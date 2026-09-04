@@ -7,27 +7,21 @@ import { ordersApi } from "@/lib/api";
 import { Order } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { formatPrice, formatDate, getProductImageUrl } from "@/lib/utils";
+import { LoadingPage } from "@/components/ui/spinner";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ShoppingBag, ArrowRight } from "lucide-react";
 
-const statusColors: Record<string, string> = {
-  Pending: "bg-yellow-100 text-yellow-700",
-  Confirmed: "bg-blue-100 text-blue-700",
-  Processing: "bg-blue-100 text-blue-700",
-  Shipped: "bg-purple-100 text-purple-700",
-  "Out for Delivery": "bg-indigo-100 text-indigo-700",
-  Delivered: "bg-green-100 text-green-700",
-  Cancelled: "bg-red-100 text-red-700",
-  Refunded: "bg-gray-100 text-gray-700",
-};
-
-const paymentStatusColors: Record<string, string> = {
-  PAID: "bg-green-100 text-green-700",
-  CAPTURED: "bg-green-100 text-green-700",
-  PENDING: "bg-yellow-100 text-yellow-700",
-  FAILED: "bg-red-100 text-red-700",
-  REFUNDED: "bg-gray-100 text-gray-700",
-  COD: "bg-blue-100 text-blue-700",
-  PENDING_COD: "bg-blue-100 text-blue-700",
+const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "info" | "secondary"> = {
+  Pending: "warning",
+  Confirmed: "info",
+  Processing: "info",
+  Shipped: "default",
+  "Out for Delivery": "default",
+  Delivered: "success",
+  Cancelled: "destructive",
+  Refunded: "secondary",
 };
 
 interface OrdersResponse {
@@ -46,22 +40,22 @@ export default function AccountOrdersPage() {
   });
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-pink-500 border-t-transparent" />
-      </div>
-    );
+    return <LoadingPage text="Loading your orders..." />;
   }
 
   if (isError) {
     return (
-      <div className="flex flex-col items-center gap-4 min-h-[40vh] justify-center">
-        <p className="text-gray-500">
-          We couldn&apos;t load your orders. Please try again.
-        </p>
-        <Link href="/account">
-          <Button variant="outline">Back to Account</Button>
-        </Link>
+      <div className="page-container max-w-3xl">
+        <h1 className="page-title">My Orders</h1>
+        <EmptyState
+          title="Failed to load orders"
+          description="We couldn't load your orders. Please try again."
+          action={
+            <Link href="/account">
+              <Button variant="outline">Back to Account</Button>
+            </Link>
+          }
+        />
       </div>
     );
   }
@@ -70,18 +64,23 @@ export default function AccountOrdersPage() {
   const totalPages = data?.pagination?.totalPages || 1;
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-3xl">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">My Orders</h1>
+    <div className="page-container max-w-3xl">
+      <h1 className="page-title">My Orders</h1>
 
       {orders.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 min-h-[40vh] justify-center">
-          <p className="text-gray-500">You have no orders yet.</p>
-          <Link href="/">
-            <Button className="bg-pink-500 hover:bg-pink-600 text-white">
-              Start Shopping
-            </Button>
-          </Link>
-        </div>
+        <EmptyState
+          icon={<ShoppingBag className="h-8 w-8" />}
+          title="No orders yet"
+          description="You haven't placed any orders. Start shopping to see your orders here."
+          action={
+            <Link href="/">
+              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+                Start Shopping
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          }
+        />
       ) : (
         <div className="space-y-4">
           {orders.map((order) => {
@@ -91,11 +90,11 @@ export default function AccountOrdersPage() {
               Number(order.price) * Number(order.quantity) ||
               0;
             return (
-              <Card key={order.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-4">
+              <Card key={order.id} className="card-hover">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="flex items-start gap-3 sm:gap-4">
                     {order.image ? (
-                      <div className="h-20 w-20 flex-shrink-0 rounded-md overflow-hidden bg-gray-100">
+                      <div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
                         <img
                           src={getProductImageUrl(order.image)}
                           alt={order.productName || order.name || ""}
@@ -103,54 +102,46 @@ export default function AccountOrdersPage() {
                         />
                       </div>
                     ) : (
-                      <div className="h-20 w-20 flex-shrink-0 rounded-md bg-gray-100 flex items-center justify-center text-gray-300">
-                        No image
+                      <div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-lg bg-muted flex items-center justify-center">
+                        <ShoppingBag className="h-6 w-6 text-muted-foreground" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-900 truncate">
-                        {order.productName || order.name || `Order #${order.id}`}
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        {order.size && `Size: ${order.size}`}{" "}
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-medium text-foreground truncate text-sm sm:text-base">
+                          {order.productName || order.name || `Order #${order.id}`}
+                        </h3>
+                        <p className="font-bold text-primary text-sm sm:text-base flex-shrink-0">
+                          {formatPrice(total)}
+                        </p>
+                      </div>
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                        {order.size && `Size: ${order.size}`}
+                        {order.size && order.quantity && " · "}
                         {order.quantity && `Qty: ${order.quantity}`}
                       </p>
                       {order.orderDate && (
-                        <p className="text-sm text-gray-500">
+                        <p className="text-xs sm:text-sm text-muted-foreground">
                           {formatDate(order.orderDate)}
                         </p>
                       )}
-                    </div>
-                    <div className="text-right">
-                      <span
-                        className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${
-                          statusColors[order.status] || "bg-gray-100 text-gray-700"
-                        }`}
-                      >
-                        {order.status}
-                      </span>
-                      <p className="mt-1 font-bold text-pink-500">
-                        {formatPrice(total)}
-                      </p>
-                      <p
-                        className={`text-xs font-medium ${
-                          paymentStatusColors[order.paymentStatus] || "text-gray-500"
-                        }`}
-                      >
-                        {order.paymentStatus === "COD" || order.paymentStatus === "PENDING_COD"
-                          ? "Cash on Delivery"
-                          : order.paymentStatus}
-                      </p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Badge variant={statusVariant[order.status] || "secondary"}>
+                          {order.status}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {order.paymentStatus === "COD" || order.paymentStatus === "PENDING_COD"
+                            ? "Cash on Delivery"
+                            : order.paymentStatus}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t">
-                    <Link href={`/orders/${order.id}`} className="inline-block">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-pink-500 text-pink-500 hover:bg-pink-500 hover:text-white"
-                      >
+                    <Link href={`/orders/${order.id}`}>
+                      <Button variant="outline" size="sm" className="gap-1.5">
                         View Details
+                        <ArrowRight className="h-3.5 w-3.5" />
                       </Button>
                     </Link>
                   </div>
@@ -160,16 +151,16 @@ export default function AccountOrdersPage() {
           })}
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 pt-2">
+            <div className="flex items-center justify-center gap-3 pt-4">
               <Button
                 variant="outline"
                 size="sm"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
-                Prev
+                Previous
               </Button>
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-muted-foreground">
                 Page {page} of {totalPages}
               </span>
               <Button

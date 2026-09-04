@@ -20,7 +20,23 @@ const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
   BREVO_API_KEY: z.string().optional(),
+  WORKER_HEALTH_PORT: z.coerce.number().default(5001),
 });
+
+const devSecretPatterns = [
+  'dev-access-secret',
+  'dev-refresh-secret',
+  'test-access-secret',
+  'test-refresh-secret',
+  'change-in-production',
+  'your-',
+  'CHANGE_ME',
+];
+
+function containsDevPattern(value: string): boolean {
+  const lower = value.toLowerCase();
+  return devSecretPatterns.some((p) => lower.includes(p.toLowerCase()));
+}
 
 export type EnvConfig = z.infer<typeof envSchema>;
 
@@ -36,21 +52,49 @@ export function validateEnv(): EnvConfig {
       .join('\n');
 
     if (nodeEnv === 'production') {
-      console.error('\n❌ FATAL: Environment validation failed (production mode):\n' + messages + '\n');
+      console.error('\nFATAL: Environment validation failed (production mode):\n' + messages + '\n');
       process.exit(1);
     } else {
-      console.warn('\n⚠️  Environment validation warnings (development mode):\n' + messages + '\n');
+      console.warn('\nEnvironment validation warnings (development mode):\n' + messages + '\n');
     }
   }
 
-  // Production-specific checks for payment keys
   if (nodeEnv === 'production') {
     if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-      console.error('\n❌ FATAL: RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required in production\n');
+      console.error('\nFATAL: RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required in production\n');
       process.exit(1);
     }
+
+    if (!process.env.RAZORPAY_WEBHOOK_SECRET) {
+      console.error('\nFATAL: RAZORPAY_WEBHOOK_SECRET is required in production\n');
+      process.exit(1);
+    }
+
     if (!process.env.BREVO_API_KEY) {
-      console.warn('\n⚠️  BREVO_API_KEY not set — email sending will fail\n');
+      console.warn('\nBREVO_API_KEY not set - email sending will fail\n');
+    }
+
+    const accessSecret = process.env.JWT_ACCESS_SECRET || '';
+    const refreshSecret = process.env.JWT_REFRESH_SECRET || '';
+
+    if (containsDevPattern(accessSecret)) {
+      console.error('\nFATAL: JWT_ACCESS_SECRET contains a development/test pattern. Generate a unique secret with: openssl rand -base64 48\n');
+      process.exit(1);
+    }
+
+    if (containsDevPattern(refreshSecret)) {
+      console.error('\nFATAL: JWT_REFRESH_SECRET contains a development/test pattern. Generate a unique secret with: openssl rand -base64 48\n');
+      process.exit(1);
+    }
+
+    if (accessSecret === refreshSecret) {
+      console.error('\nFATAL: JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different\n');
+      process.exit(1);
+    }
+
+    if (process.env.FRONTEND_URL === 'http://localhost:3000') {
+      console.error('\nFATAL: FRONTEND_URL must be set to the production domain URL\n');
+      process.exit(1);
     }
   }
 

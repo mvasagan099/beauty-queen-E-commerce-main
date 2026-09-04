@@ -4,7 +4,10 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useSearchProducts } from "@/hooks/use-products";
 import { ProductGrid } from "@/components/product/product-grid";
 import { Pagination } from "@/components/product/pagination";
+import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingPage } from "@/components/ui/spinner";
 import { Suspense, useCallback } from "react";
+import { Search } from "lucide-react";
 
 const SORT_OPTIONS = [
   { value: "", label: "Relevance" },
@@ -30,7 +33,7 @@ function SearchResults() {
     saree: "Sarees",
     kurthi: "Kurthis",
     top: "Tops",
-    leggin: "Leggins",
+    leggin: "Leggings",
     cosmetics: "Cosmetics",
   };
 
@@ -51,49 +54,52 @@ function SearchResults() {
   );
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Search Results</h1>
+    <div className="page-container">
+      <h1 className="page-title">Search Results</h1>
 
       {q && (
-        <p className="text-gray-500 mb-6">
-          Showing results for &ldquo;{q}&rdquo;
+        <p className="text-muted-foreground mb-6">
+          Showing results for &ldquo;<span className="font-medium text-foreground">{q}</span>&rdquo;
           {pagination && pagination.total > 0 && (
             <span>
-              {" "}
-              &mdash; {pagination.total} product{pagination.total !== 1 ? "s" : ""} found
+              {" "}— {pagination.total} product{pagination.total !== 1 ? "s" : ""} found
             </span>
           )}
         </p>
       )}
 
       {!q && (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-          <p className="text-gray-400 text-lg">Enter a search term to find products.</p>
-        </div>
+        <EmptyState
+          icon={<Search className="h-8 w-8" />}
+          title="Enter a search term"
+          description="Type something in the search bar to find products."
+        />
       )}
 
       {error && (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-          <p className="text-red-500">Something went wrong. Please try again.</p>
-        </div>
+        <EmptyState
+          title="Something went wrong"
+          description="We couldn't complete your search. Please try again."
+          action={
+            <button onClick={() => window.location.reload()} className="btn-primary">
+              Try Again
+            </button>
+          }
+        />
       )}
 
-      {isLoading && q && (
-        <div className="flex items-center justify-center min-h-[40vh]">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-pink-500 border-t-transparent" />
-        </div>
-      )}
+      {isLoading && q && <LoadingPage text="Searching products..." />}
 
       {!isLoading && !error && q && products.length > 0 && (
         <>
           <div className="flex items-center justify-between mb-6">
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-muted-foreground">
               Page {pagination?.page || 1} of {pagination?.totalPages || 1}
             </span>
             <select
               value={sort}
               onChange={(e) => updateParam("sort", e.target.value)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-pink-500"
+              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               aria-label="Sort search results"
             >
               {SORT_OPTIONS.map((opt) => (
@@ -107,43 +113,47 @@ function SearchResults() {
           <ProductGrid products={products} />
 
           {pagination && pagination.totalPages > 1 && (
-            <Pagination
-              currentPage={pagination.page}
-              totalPages={pagination.totalPages}
-              baseUrl="/search"
-              params={{
-                q,
-                ...(sort ? { sort } : {}),
-              }}
-            />
+            <div className="mt-8">
+              <Pagination
+                currentPage={pagination.page}
+                totalPages={pagination.totalPages}
+                baseUrl="/search"
+                params={{
+                  q,
+                  ...(sort ? { sort } : {}),
+                }}
+              />
+            </div>
           )}
         </>
       )}
 
       {!isLoading && q && products.length === 0 && !error && (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-6">
-          <p className="text-gray-500 text-lg">No products found for &ldquo;{q}&rdquo;</p>
-          <p className="text-gray-400 text-sm">Try a different search term.</p>
-
-          {suggestedCategories.length > 0 && (
-            <div className="flex flex-col items-center gap-3">
-              <p className="text-sm font-medium text-gray-600">
-                These categories might have what you&rsquo;re looking for:
-              </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {suggestedCategories.map((slug) => (
-                  <a
-                    key={slug}
-                    href={`/${slug}`}
-                    className="rounded-full border border-pink-200 bg-pink-50 px-4 py-1.5 text-sm text-pink-700 hover:bg-pink-100"
-                  >
-                    {categoryLabel[slug] || slug}
-                  </a>
-                ))}
+        <EmptyState
+          icon={<Search className="h-8 w-8" />}
+          title={`No results for "${q}"`}
+          description="Try a different search term or browse our categories."
+          action={
+            suggestedCategories.length > 0 ? (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-sm font-medium text-muted-foreground">
+                  These categories might have what you&apos;re looking for:
+                </p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {suggestedCategories.map((slug) => (
+                    <a
+                      key={slug}
+                      href={`/${slug}`}
+                      className="rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
+                    >
+                      {categoryLabel[slug] || slug}
+                    </a>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            ) : undefined
+          }
+        />
       )}
     </div>
   );
@@ -152,11 +162,7 @@ function SearchResults() {
 export default function SearchPage() {
   return (
     <Suspense
-      fallback={
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-pink-500 border-t-transparent" />
-        </div>
-      }
+      fallback={<LoadingPage text="Loading search..." />}
     >
       <SearchResults />
     </Suspense>

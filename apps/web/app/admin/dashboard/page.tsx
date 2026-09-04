@@ -5,6 +5,7 @@ import { adminApi, downloadExport, ExportResource } from "@/lib/api";
 import { formatPrice } from "@/lib/utils";
 import { StatCard, BarChart, StatusBadge } from "@/components/dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import {
   Package,
@@ -47,7 +48,10 @@ export default function AdminDashboardPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-pink-500 border-t-transparent" />
+        <div className="flex flex-col items-center gap-4">
+          <Spinner size="lg" />
+          <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+        </div>
       </div>
     );
   }
@@ -58,7 +62,7 @@ export default function AdminDashboardPage() {
   const handleExport = async (resource: ExportResource) => {
     try {
       await downloadExport(resource);
-      toast.success(`${resource} export downloaded`);
+      toast.success(`${resource.charAt(0).toUpperCase() + resource.slice(1)} export downloaded`);
     } catch (err) {
       toast.error((err as Error).message || "Export failed");
     }
@@ -67,15 +71,15 @@ export default function AdminDashboardPage() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <Download className="h-4 w-4 text-gray-400" />
+        <h1 className="page-title mb-0">Admin Dashboard</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Download className="h-4 w-4 text-muted-foreground" />
             {EXPORT_LABELS.map((e) => (
               <button
                 key={e.resource}
                 onClick={() => handleExport(e.resource)}
-                className="rounded-md border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-600 hover:border-pink-300 hover:text-pink-600"
+                className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
                 title={`Export ${e.label} as CSV`}
               >
                 {e.label}
@@ -84,14 +88,14 @@ export default function AdminDashboardPage() {
           </div>
           <Link
             href="/admin/analytics"
-            className="rounded-md bg-pink-500 px-4 py-2 text-sm font-medium text-white hover:bg-pink-600"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             View Analytics
           </Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-8">
         <StatCard
           label="Total Products"
           value={stats.totalProducts || 0}
@@ -149,12 +153,12 @@ export default function AdminDashboardPage() {
       </div>
 
       <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Orders by Status</CardTitle>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg">Orders by Status</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="mb-4 gap-2 flex flex-wrap">
-            {Object.entries(orderStatus).map(([status, count]) => (
+            {Object.entries(orderStatus).map(([status]) => (
               <StatusBadge key={status} status={status} />
             ))}
           </div>
@@ -168,34 +172,34 @@ export default function AdminDashboardPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <Link
           href="/admin/products"
-          className="rounded-lg border bg-white p-4 text-center hover:shadow-md transition-shadow"
+          className="rounded-xl border bg-card p-4 text-center hover:shadow-md transition-all group"
         >
-          <Package className="h-6 w-6 mx-auto mb-2 text-pink-500" />
-          <p className="font-medium text-gray-900">Manage Products</p>
+          <Package className="h-6 w-6 mx-auto mb-2 text-primary group-hover:scale-110 transition-transform" />
+          <p className="font-medium text-foreground text-sm">Manage Products</p>
         </Link>
         <Link
           href="/admin/orders"
-          className="rounded-lg border bg-white p-4 text-center hover:shadow-md transition-shadow"
+          className="rounded-xl border bg-card p-4 text-center hover:shadow-md transition-all group"
         >
-          <ShoppingCart className="h-6 w-6 mx-auto mb-2 text-blue-500" />
-          <p className="font-medium text-gray-900">Manage Orders</p>
+          <ShoppingCart className="h-6 w-6 mx-auto mb-2 text-blue-500 group-hover:scale-110 transition-transform" />
+          <p className="font-medium text-foreground text-sm">Manage Orders</p>
         </Link>
         <Link
           href="/admin/sellers"
-          className="rounded-lg border bg-white p-4 text-center hover:shadow-md transition-shadow"
+          className="rounded-xl border bg-card p-4 text-center hover:shadow-md transition-all group"
         >
-          <Store className="h-6 w-6 mx-auto mb-2 text-orange-500" />
-          <p className="font-medium text-gray-900">Manage Sellers</p>
+          <Store className="h-6 w-6 mx-auto mb-2 text-orange-500 group-hover:scale-110 transition-transform" />
+          <p className="font-medium text-foreground text-sm">Manage Sellers</p>
         </Link>
         <Link
           href="/admin/users"
-          className="rounded-lg border bg-white p-4 text-center hover:shadow-md transition-shadow"
+          className="rounded-xl border bg-card p-4 text-center hover:shadow-md transition-all group"
         >
-          <Users className="h-6 w-6 mx-auto mb-2 text-purple-500" />
-          <p className="font-medium text-gray-900">Manage Users</p>
+          <Users className="h-6 w-6 mx-auto mb-2 text-purple-500 group-hover:scale-110 transition-transform" />
+          <p className="font-medium text-foreground text-sm">Manage Users</p>
         </Link>
       </div>
     </div>

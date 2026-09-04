@@ -247,11 +247,10 @@ const wishlistMutation = useMutation({
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Images */}
+    <div className="container-page py-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
         <div>
-          <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 mb-4">
+          <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-gray-100 mb-4">
             <Image
               src={getImgSrc(images[activeImage] || p.image, activeImage)}
               alt={p.name || "Product image"}
@@ -264,15 +263,15 @@ const wishlistMutation = useMutation({
             />
           </div>
           {images.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
               {images.map((img, i) => (
                 <button
                   key={i}
                   onClick={() => setActiveImage(i)}
-                  className={`relative h-20 w-20 flex-shrink-0 rounded-md overflow-hidden border-2 transition-colors ${
+                  className={`relative h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${
                     activeImage === i
-                      ? "border-pink-500"
-                      : "border-gray-200 hover:border-pink-300"
+                      ? "border-primary ring-2 ring-primary/20"
+                      : "border-gray-200 hover:border-primary/40"
                   }`}
                   aria-label={`View image ${i + 1}`}
                 >
@@ -291,113 +290,120 @@ const wishlistMutation = useMutation({
           )}
         </div>
 
-        {/* Details */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">{p.name}</h1>
-          <div className="mt-4 flex items-center gap-4">
+        <div className="space-y-5">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{p.name}</h1>
+            {p.ptype && (
+              <p className="text-sm text-muted-foreground mt-1 capitalize">{p.ptype}</p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
             {p.price != null && (
-              <span className="text-3xl font-bold text-pink-500">
+              <span className="text-2xl sm:text-3xl font-bold text-primary">
                 {formatPrice(p.price)}
               </span>
             )}
             {p.mrp != null && p.mrp > (p.price ?? 0) && (
-              <span className="text-xl text-gray-400 line-through">
-                {formatPrice(p.mrp)}
-              </span>
+              <>
+                <span className="text-lg text-muted-foreground line-through">
+                  {formatPrice(p.mrp)}
+                </span>
+                <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-bold text-green-700">
+                  {Math.round(((p.mrp - p.price!) / p.mrp) * 100)}% OFF
+                </span>
+              </>
             )}
           </div>
 
-          {p.mrp != null && p.price != null && p.mrp > p.price && (
-            <span className="mt-2 inline-block rounded bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
-              {Math.round(((p.mrp - p.price) / p.mrp) * 100)}% OFF
-            </span>
-          )}
-
           <span
-            className={`mt-2 inline-block rounded px-3 py-1 text-sm font-medium ${
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
               isOutOfStock
                 ? "bg-red-100 text-red-700"
                 : isLowStock
-                ? "bg-amber-100 text-amber-700"
+                ? "bg-yellow-100 text-yellow-700"
                 : "bg-green-100 text-green-700"
             }`}
           >
             {isOutOfStock
               ? "Out of Stock"
               : isLowStock
-              ? `Only ${availableStock} left in stock`
+              ? `Only ${availableStock} left - order soon!`
               : "In Stock"}
           </span>
 
           {p.description && (
-            <p className="mt-4 text-gray-600 whitespace-pre-line">{p.description}</p>
+            <p className="text-muted-foreground leading-relaxed whitespace-pre-line">{p.description}</p>
           )}
 
-          {/* Sizes */}
           {availableSizes.length > 0 && (
-            <div className="mt-6">
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                Select Size
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-3">
+                Select Size {!selectedSize && availableSizes.length > 0 && <span className="text-destructive">*</span>}
               </h3>
-              <div className="flex gap-2" role="radiogroup" aria-label="Product size">
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Product size">
                 {availableSizes.map((s) => (
                   <button
                     key={s.label}
                     onClick={() => setSelectedSize(s.label)}
                     role="radio"
                     aria-checked={selectedSize === s.label}
-                    className={`h-10 min-w-[40px] rounded-md border px-3 text-sm font-medium transition-colors ${
+                    className={`h-10 min-w-[40px] rounded-lg border-2 px-4 text-sm font-medium transition-all ${
                       selectedSize === s.label
-                        ? "border-pink-500 bg-pink-500 text-white"
-                        : "border-gray-300 hover:border-pink-500"
+                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                        : "border-border hover:border-primary/50 text-foreground"
                     }`}
                   >
                     {s.label}
                   </button>
                 ))}
               </div>
+              {!selectedSize && (
+                <p className="text-xs text-muted-foreground mt-1.5">Please select a size to continue</p>
+              )}
             </div>
           )}
 
-          {/* Quantity */}
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">
-              Quantity
-            </h3>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-3">Quantity</h3>
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="h-10 w-10 rounded-md border border-gray-300 text-lg font-medium hover:bg-gray-50 disabled:opacity-50"
-                disabled={quantity <= 1}
-                aria-label="Decrease quantity"
-              >
-                -
-              </button>
-              <span className="w-10 text-center font-medium" aria-live="polite">
-                {quantity}
-              </span>
-              <button
-                onClick={() => setQuantity(quantity + 1)}
-                className="h-10 w-10 rounded-md border border-gray-300 text-lg font-medium hover:bg-gray-50 disabled:opacity-50"
-                disabled={quantity >= availableStock}
-                aria-label="Increase quantity"
-              >
-                +
-              </button>
+              <div className="flex items-center rounded-lg border border-input">
+                <button
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  className="h-10 w-10 flex items-center justify-center text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={quantity <= 1}
+                  aria-label="Decrease quantity"
+                >
+                  -
+                </button>
+                <span className="w-12 text-center text-sm font-semibold tabular-nums" aria-live="polite">
+                  {quantity}
+                </span>
+                <button
+                  onClick={() => setQuantity(quantity + 1)}
+                  className="h-10 w-10 flex items-center justify-center text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={quantity >= availableStock}
+                  aria-label="Increase quantity"
+                >
+                  +
+                </button>
+              </div>
+              {isLowStock && (
+                <span className="text-xs text-yellow-600">{availableStock} available</span>
+              )}
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="mt-8 flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Button
-              className="flex-1 bg-pink-500 hover:bg-pink-600 text-white"
+              className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground h-12 text-base"
               disabled={!selectedSize || addToCartMutation.isPending || isOutOfStock}
               onClick={() => addToCartMutation.mutate()}
             >
               {addToCartMutation.isPending ? "Adding..." : isOutOfStock ? "Out of Stock" : "Add to Cart"}
             </Button>
             <Button
-              className="flex-1 bg-gray-900 hover:bg-gray-800 text-white"
+              className="flex-1 bg-foreground hover:bg-foreground/90 text-background h-12 text-base"
               disabled={!selectedSize || buyNowMutation.isPending || isOutOfStock}
               onClick={() => buyNowMutation.mutate()}
             >
@@ -406,23 +412,29 @@ const wishlistMutation = useMutation({
             {user && (
               <Button
                 variant="outline"
-                className="px-3"
+                className="h-12 w-12 px-0 flex-shrink-0"
                 onClick={() => wishlistMutation.mutate()}
                 aria-pressed={inWishlist}
                 aria-label={inWishlist ? "Remove from wishlist" : "Add to wishlist"}
                 title={inWishlist ? "Remove from wishlist" : "Add to wishlist"}
               >
                 <Heart
-                  className={`h-5 w-5 ${inWishlist ? "fill-pink-500 text-pink-500" : "text-gray-500"}`}
+                  className={`h-5 w-5 ${inWishlist ? "fill-primary text-primary" : "text-muted-foreground"}`}
                 />
               </Button>
             )}
           </div>
 
+          {addToCartMutation.isError && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3">
+              <p className="text-sm text-destructive">Failed to add to cart. Please try again.</p>
+            </div>
+          )}
+
           {user && productOutOfStock && (
             <Button
               variant="outline"
-              className="mt-4 w-full sm:w-auto"
+              className="w-full sm:w-auto"
               onClick={() => stockAlertMutation.mutate()}
               disabled={stockAlertMutation.isPending}
             >
@@ -436,37 +448,39 @@ const wishlistMutation = useMutation({
           )}
 
           {user && (
-            <div className="mt-3">
+            <div className="mt-1">
               {priceAlertOpen ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm text-gray-600">Email me when price is at or below &nbsp;(₹):</span>
+                  <span className="text-sm text-muted-foreground">Email me when price drops to (₹):</span>
                   <input
                     type="number"
                     min={1}
                     value={priceTarget}
                     onChange={(e) => setPriceTarget(e.target.value)}
-                    className="h-9 w-28 rounded-md border border-gray-300 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-pink-500"
+                    className="h-9 w-28 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     aria-label="Target price for alert"
                   />
                   <Button
                     size="sm"
-                    className="bg-pink-500 hover:bg-pink-600 text-white"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
                     disabled={priceAlertMutation.isPending || !priceTarget || Number(priceTarget) < 1}
                     onClick={() => priceAlertMutation.mutate(Number(priceTarget))}
                   >
                     Save Alert
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setPriceAlertOpen(false)}>
+                  <Button size="sm" variant="ghost" onClick={() => setPriceAlertOpen(false)}>
                     Cancel
                   </Button>
                 </div>
               ) : (
                 <Button
-                  variant="outline"
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground gap-1.5"
                   onClick={() => (priceAlertActive ? priceAlertMutation.mutate(currentPrice) : openPriceAlert())}
                   disabled={priceAlertMutation.isPending}
                 >
-                  <BellOff className="h-4 w-4 mr-2" />
+                  <BellOff className="h-4 w-4" />
                   {priceAlertMutation.isPending
                     ? "Working..."
                     : priceAlertActive
@@ -476,36 +490,26 @@ const wishlistMutation = useMutation({
               )}
             </div>
           )}
-
-          {addToCartMutation.isError && (
-            <p className="mt-2 text-sm text-red-500">
-              Failed to add to cart. Please try again.
-            </p>
-          )}
-
-          {!selectedSize && availableSizes.length > 0 && (
-            <p className="mt-2 text-sm text-gray-500">
-              Please select a size to continue
-            </p>
-          )}
         </div>
       </div>
 
-      {/* Related Products */}
-      <RelatedProducts productId={productId} limit={4} />
+      <div className="mt-12 md:mt-16">
+        <RelatedProducts productId={productId} limit={4} />
+      </div>
 
-      {/* Frequently Bought Together */}
-      <FrequentlyBoughtTogether productId={productId} limit={4} />
+      <div className="mt-12">
+        <FrequentlyBoughtTogether productId={productId} limit={4} />
+      </div>
 
-      {/* Recently Viewed */}
-      <RecentlyViewed limit={4} />
+      <div className="mt-12">
+        <RecentlyViewed limit={4} />
+      </div>
 
-      {/* Reviews */}
-      <div className="mt-16">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Customer Reviews</h2>
+      <div className="mt-12 md:mt-16">
+        <h2 className="section-title mb-6">Customer Reviews</h2>
         {user && (
-          <div className="mb-8 rounded-lg border border-gray-200 p-6">
-            <h3 className="text-base font-semibold text-gray-800 mb-4">Write a Review</h3>
+          <div className="mb-8 rounded-xl border p-6">
+            <h3 className="text-base font-semibold text-foreground mb-4">Write a Review</h3>
             <ReviewForm
               productId={productId}
               onSuccess={() => queryClient.invalidateQueries({ queryKey: ["reviews", productId] })}

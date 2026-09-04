@@ -1,6 +1,8 @@
 # -- Build stage --
 FROM node:20-alpine AS builder
 
+RUN apk add --no-cache libc6-compat tini
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -17,7 +19,9 @@ RUN cd apps/api && npm run build
 # -- Production stage --
 FROM node:20-alpine AS runner
 
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat tini \
+    && addgroup -g 1001 -S app \
+    && adduser -u 1001 -S app -G app
 
 WORKDIR /app
 
@@ -33,9 +37,14 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/node_modules/.prisma ./apps/api/node_modules/.prisma
 COPY --from=builder /app/apps/api/node_modules/@prisma ./apps/api/node_modules/@prisma
 
+RUN chown -R app:app /app
+
+USER app
+
 EXPOSE 5001
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget -qO- http://localhost:5001/api/health/live || exit 1
 
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "apps/api/dist/worker.js"]
