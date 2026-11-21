@@ -1,6 +1,14 @@
-# Beauty Queen E-commerce
+# Beauty Queen E-commerce — *"Your Beauty, Our Priority"*
 
-Full-stack e-commerce application built with Next.js 15 + NestJS + Prisma + MySQL.
+Full-stack Indian women's fashion & beauty e-commerce platform (**Sarees, Kurthis, Tops, Leggings, Cosmetics**) built with Next.js 15, NestJS, Prisma, MySQL, and Redis — featuring an interactive **3D Madras Silk Atelier** storefront, multi-seller operations, GST PDF invoicing, and automated CI/CD.
+
+## Key Features
+- **3D Atelier Storefront:** Interactive 3D couture stage (`AtelierStage3D`), perspective tilt collection cards, hover-zoom PDP gallery with lightbox, Indian Size & Fit guide, and Pincode delivery/COD estimator.
+- **Conversion-First Shopping:** Guest cart with `localStorage` persistence & login merge, slide-out mini-cart drawer, inline Quick-Add, `FREE_SIZE` support, and faceted category/search filters.
+- **Enterprise Commerce Core:** Row-locked checkout (`FOR UPDATE`), Redis 10-minute stock reservations, multi-item Grouped Orders, dynamic Categories & Collections CMS (`/admin/categories`, `/collections/[slug]`), and Seller bulk CSV stock import/export.
+- **Indian Fulfillment & Compliance:** Downloadable GST-compliant PDF & HTML tax invoices (HSN + CGST/SGST/IGST), Shiprocket courier integration & tracking webhooks, and S3 / Cloudflare R2 + CDN media storage with WebP thumbnails.
+- **Growth & Engagement:** WhatsApp Business Cloud API order & COD verification alerts, **Queen's Circle** loyalty & referrals (`/account/loyalty`), Admin Flash Sale Banner CMS (`/admin/merchandising`), interactive Cosmetics Shade Studio & AI Stylist, and installable PWA manifest.
+- **Observability & QA:** Prometheus OpenMetrics (`/api/metrics/prometheus`), 5xx webhook alerting, `26` Jest suites (`177` unit tests), `48` Chromium Playwright E2E tests, and automated GHCR Docker publishing. See [docs/GO-LIVE-RUNBOOK.md](docs/GO-LIVE-RUNBOOK.md) to deploy.
 
 ## Architecture
 
@@ -16,27 +24,24 @@ Full-stack e-commerce application built with Next.js 15 + NestJS + Prisma + MySQ
                     │   REST API    │
                     └───────┬───────┘
                             │
-          ┌─────────────────┼─────────────────┐
-          ▼                 ▼                 ▼
-       Prisma             Redis            Razorpay
-          │                 │
-          ▼                 ▼
-        MySQL            BullMQ
-                            │
-                            ▼
-                         Workers
-                            │
-                            ▼
-                          Brevo
+     ┌──────────────┬───────┴────────┬──────────────┐
+     ▼              ▼                ▼              ▼
+  Prisma          Redis           Razorpay      Shiprocket
+     │              │            / WhatsApp     / S3 / R2
+     ▼              ▼
+   MySQL          BullMQ
+                    │
+                    ▼
+                 Workers ──► Brevo Email
 ```
 
 ## Tech Stack
 
-- **Frontend**: Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS, Zustand, React Query
-- **Backend**: NestJS, Prisma ORM, MySQL, Redis, BullMQ, JWT + Refresh Tokens
-- **Payments**: Razorpay (UPI + COD)
-- **Email**: Brevo SMTP API
-- **Deployment**: Docker, Docker Compose, GitHub Actions CI/CD
+- **Frontend**: Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS, Zustand, TanStack Query, PWA Manifest
+- **Backend**: NestJS, Prisma ORM, MySQL 8, Redis 7, BullMQ, JWT + Refresh Tokens, Prometheus Metrics
+- **Payments & Logistics**: Razorpay (UPI + COD), Shiprocket courier API, Zero-dependency GST PDF generator
+- **Notifications & Media**: Brevo Email API, Meta WhatsApp Cloud API, Sharp WebP + Local/S3/R2 storage
+- **Deployment & QA**: Docker, Docker Compose, Nginx 1.27, Playwright E2E, GitHub Actions CI/CD (GHCR)
 
 ## Prerequisites
 

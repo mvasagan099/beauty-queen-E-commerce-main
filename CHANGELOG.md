@@ -2,6 +2,28 @@
 
 All notable changes to the Beauty Queen E-commerce monorepo.
 
+## [3.0.0] — Luxury 3D Atelier & 6-Phase Production Commerce Suite (2026-11-21)
+
+### Added & Fixed
+- **3D Animated Flagship Storefront ("Madras Silk Atelier & Royal Lacquer"):**
+  - Interactive Three.js-style 3D WebGL couture stage (`AtelierStage3D`), editorial hero (`AtelierHero`), perspective tilt cards (`TiltCard3D`), 5-collection runway (`AtelierRunway`), and studio photography for Saree, Kurthi, Top, Leggin, and Cosmetics.
+- **Phase 1 — Conversion & Correctness Fixes:**
+  - Fixed `CartService.getCart` double-discount pricing bug; fixed raw MySQL `FOR UPDATE` camelCase column bug (`sizeS` → `size_s`) in `CheckoutService` & `PaymentsService` via shared `product-size.util.ts`.
+  - Added `FREE_SIZE` support across API + PDP; built persisted `useGuestCartStore` with auto-merge on login, slide-out `CartDrawer` with stock caps, and double-submit `x-csrf-token` client mirroring.
+- **Phase 2 — Catalog Discovery & PDP Upgrades:**
+  - Added backend `size` query filter on `GET /api/products`, fixed `GET /api/shipping/calculate` query parsing, built `ProductFilters` (category + search), hover-zoom & lightbox `ProductGallery`, `SizeGuideModal`, `PincodeChecker`, and `ProductCard` Quick-Add bar.
+- **Phase 3 — Core Commerce Operations:**
+  - Added Redis 10-minute checkout `StockReservationService`, dynamic `SiteConfig`-backed Categories & Collections CRUD (`/admin/categories`, `/collections/[slug]`), bulk CSV inventory import/export (`POST /api/inventory/bulk`, `GET /api/inventory/export`), and multi-item Grouped Orders (`GET /api/orders/grouped`).
+- **Phase 4 — GST PDF Invoices, S3/R2 Media & Shiprocket:**
+  - Zero-dependency GST PDF 1.4 & printable HTML tax invoices (`GET /api/invoices/order/:id/pdf` & `/html`), `MediaStorageService` (local + CDN + S3/R2 SigV4) with `320×400` WebP thumbnails, and `ShiprocketShippingProvider` + `POST /api/shipping/webhook`.
+- **Phase 5 — Observability, Playwright CI & Pre-Flight:**
+  - Added `GET /api/metrics/prometheus`, non-blocking 5xx webhook error reporting, `apps/web/e2e/storefront-flows.spec.ts` (`48/48` Chromium tests in CI), and `scripts/preflight-check.sh`.
+- **Phase 6 — Post-Launch Growth & Differentiators:**
+  - Meta WhatsApp Business Cloud API adapter (`WhatsAppService`) wired into `CheckoutService` for order confirmation & COD verification prompts.
+  - Queen's Circle loyalty & referral engine (`GrowthService`, `/account/loyalty`), Admin Flash Sale Merchandising CMS (`/admin/merchandising`, `FlashSaleBanner`), interactive Cosmetics Shade Studio & AI Stylist (`AtelierStylistStudio`), and PWA `/manifest.webmanifest`.
+- **CI/CD & Production Hardening:**
+  - Fixed Nginx `$proxy_add_x_forwarded_for` typo & HTTP/2 directive, fixed `MobileMenu` auto-close UX bug, fixed `docker/web/Dockerfile` standalone stages, switched `deploy.yml` to `workflow_run` with secret-guarded SSH steps, and verified `7/7` CI jobs green + GHCR image publishing.
+
 ## [1.0.0-rc.1] — Phase 15 Release Candidate 1 (2026-08-28)
 
 ### Fixed (resilience / correctness)
