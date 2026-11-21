@@ -5,6 +5,7 @@ import { CartService } from '../cart/cart.service';
 import { PricingService } from '../pricing/pricing.service';
 import { BuyNowDto } from './dto/checkout.dto';
 import { CheckoutAddressDto } from './dto/checkout.dto';
+import { resolveProductSize } from '../common/product-size.util';
 
 @Injectable()
 export class CheckoutService {
@@ -113,15 +114,15 @@ export class CheckoutService {
         }
 
         const price = product.price || 0;
-        const sizeField = this.getSizeField(item.size);
+        const { prismaField: sizeField, dbColumn, canonicalSize } = resolveProductSize(item.size);
         const lockedRows = await tx.$queryRawUnsafe(
-          `SELECT ${sizeField} AS qty FROM products WHERE id = ? FOR UPDATE`,
+          `SELECT ${dbColumn} AS qty FROM products WHERE id = ? FOR UPDATE`,
           item.productId,
         );
         const currentQty = (lockedRows as any)[0]?.qty ?? 0;
         if (currentQty < item.quantity) {
           throw new BadRequestException(
-            `Insufficient stock for "${item.name}" (size ${item.size}). Available: ${currentQty}`,
+            `Insufficient stock for "${item.name}" (size ${canonicalSize}). Available: ${currentQty}`,
           );
         }
 
@@ -131,7 +132,7 @@ export class CheckoutService {
             productId: item.productId,
             sellerId: product.sellerId,
             name: product.name,
-            size: item.size,
+            size: canonicalSize,
             price,
             quantity: item.quantity,
             subtotal: price * item.quantity,
@@ -193,17 +194,14 @@ export class CheckoutService {
       throw new NotFoundException('Product is no longer available');
     }
 
-    const validSizes = ['S', 'M', 'L', 'XL', 'XXL'];
-    if (!validSizes.includes(dto.size)) {
-      throw new BadRequestException(`Selected size is unavailable: ${dto.size}`);
-    }
+    const { prismaField: sizeField, dbColumn, canonicalSize } = resolveProductSize(dto.size);
 
     const availableQty = await this.productsService.getAvailableSizeQty(
       product,
-      dto.size,
+      canonicalSize,
     );
     if (availableQty <= 0) {
-      throw new BadRequestException(`Size ${dto.size} is out of stock`);
+      throw new BadRequestException(`Size ${canonicalSize} is out of stock`);
     }
     if (dto.quantity > availableQty) {
       throw new BadRequestException(
@@ -215,15 +213,14 @@ export class CheckoutService {
     const subtotal = price * dto.quantity;
 
     const order = await this.prisma.$transaction(async (tx) => {
-      const sizeField = this.getSizeField(dto.size);
       const locked = await tx.$queryRawUnsafe(
-        `SELECT ${sizeField} AS qty FROM products WHERE id = ? FOR UPDATE`,
+        `SELECT ${dbColumn} AS qty FROM products WHERE id = ? FOR UPDATE`,
         dto.productId,
       );
       const currentQty = (locked as any)[0]?.qty ?? 0;
       if (currentQty < dto.quantity) {
         throw new BadRequestException(
-          `Insufficient stock for size ${dto.size}. Available: ${currentQty}`,
+          `Insufficient stock for size ${canonicalSize}. Available: ${currentQty}`,
         );
       }
 
@@ -233,7 +230,7 @@ export class CheckoutService {
           productId: dto.productId,
           sellerId: product.sellerId,
           name: product.name,
-          size: dto.size,
+          size: canonicalSize,
           price,
           quantity: dto.quantity,
           subtotal,
@@ -245,7 +242,7 @@ export class CheckoutService {
           landmark: address.landmark || null,
           paymentMethod: paymentMethod === 'upi' ? 'UPI' : 'COD',
           paymentId: paymentId || null,
-          paymentStatus: paymentMethod === 'cod' ? 'Pending' : 'Pending',
+          paymentStatus: 'Pending',
           status: 'Pending',
         },
         include: { product: true },
@@ -271,20 +268,5 @@ export class CheckoutService {
 
     this.logger.log(`Order ${order.id} created via Buy Now for ${address.email}`);
     return order;
-  }
-
-  private getSizeField(size: string): string {
-    const sizeMap: Record<string, string> = {
-      S: 'sizeS',
-      M: 'sizeM',
-      L: 'sizeL',
-      XL: 'sizeXl',
-      XXL: 'sizeXxl',
-    };
-    const field = sizeMap[size];
-    if (!field) {
-      throw new BadRequestException(`Invalid size: ${size}`);
-    }
-    return field;
   }
 }

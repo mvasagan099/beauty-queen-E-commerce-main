@@ -4,17 +4,11 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useProducts } from "@/hooks/use-products";
 import { ProductGrid } from "@/components/product/product-grid";
 import { Pagination } from "@/components/product/pagination";
+import { ProductFilters, CatalogFilterValues } from "@/components/product/ProductFilters";
 import { LoadingPage } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Suspense, useCallback } from "react";
 import { Package } from "lucide-react";
-
-const SORT_OPTIONS = [
-  { value: "", label: "Default" },
-  { value: "price_asc", label: "Price: Low to High" },
-  { value: "price_desc", label: "Price: High to Low" },
-  { value: "newest", label: "Newest First" },
-];
 
 interface CategoryPageProps {
   category: string;
@@ -25,61 +19,82 @@ interface CategoryPageProps {
 function CategoryContent({ category, title, description }: CategoryPageProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
+
   const page = Number(searchParams.get("page") || "1");
   const sort = searchParams.get("sort") || "";
+  const minPrice = searchParams.get("minPrice") ? Number(searchParams.get("minPrice")) : undefined;
+  const maxPrice = searchParams.get("maxPrice") ? Number(searchParams.get("maxPrice")) : undefined;
+  const size = searchParams.get("size") || undefined;
+  const inStock = searchParams.get("inStock") === "true" ? true : undefined;
 
-  const { data, isLoading } = useProducts({ category, page, limit: 20, sort: sort || undefined });
+  const { data, isLoading } = useProducts({
+    category,
+    page,
+    limit: 20,
+    sort: sort || undefined,
+    minPrice,
+    maxPrice,
+    size,
+    inStock,
+  });
 
-  const updateSort = useCallback(
-    (value: string) => {
+  const updateFilters = useCallback(
+    (patch: Partial<CatalogFilterValues>) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (value) {
-        params.set("sort", value);
-      } else {
-        params.delete("sort");
-      }
+
+      const setOrDelete = (key: string, val: string | number | boolean | undefined) => {
+        if (val === undefined || val === "" || val === false) {
+          params.delete(key);
+        } else {
+          params.set(key, String(val));
+        }
+      };
+
+      if ("sort" in patch) setOrDelete("sort", patch.sort);
+      if ("minPrice" in patch) setOrDelete("minPrice", patch.minPrice);
+      if ("maxPrice" in patch) setOrDelete("maxPrice", patch.maxPrice);
+      if ("size" in patch) setOrDelete("size", patch.size);
+      if ("inStock" in patch) setOrDelete("inStock", patch.inStock);
+
       params.delete("page");
-      router.push(`/${category}?${params.toString()}`, { scroll: false });
+      const qs = params.toString();
+      router.push(qs ? `/${category}?${qs}` : `/${category}`, { scroll: false });
     },
     [searchParams, router, category],
   );
 
+  const resetFilters = useCallback(() => {
+    router.push(`/${category}`, { scroll: false });
+  }, [router, category]);
+
+  const paginationParams: Record<string, string> = {};
+  if (sort) paginationParams.sort = sort;
+  if (minPrice != null) paginationParams.minPrice = String(minPrice);
+  if (maxPrice != null) paginationParams.maxPrice = String(maxPrice);
+  if (size) paginationParams.size = size;
+  if (inStock) paginationParams.inStock = "true";
+
   return (
     <div className="page-container">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="page-title mb-1">{title}</h1>
         <p className="text-muted-foreground">{description}</p>
       </div>
 
-      {data?.pagination && data.pagination.total > 0 && (
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-sm text-muted-foreground">
-            Showing {(data.pagination.page - 1) * data.pagination.limit + 1}-
-            {Math.min(data.pagination.page * data.pagination.limit, data.pagination.total)} of{" "}
-            {data.pagination.total} products
-          </p>
-          <select
-            value={sort}
-            onChange={(e) => updateSort(e.target.value)}
-            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            aria-label="Sort products"
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      <ProductFilters
+        values={{ sort, minPrice, maxPrice, size, inStock }}
+        totalCount={data?.pagination?.total}
+        onChange={updateFilters}
+        onReset={resetFilters}
+      />
 
       {isLoading ? (
         <LoadingPage text={`Loading ${title.toLowerCase()}...`} />
       ) : (data?.products || []).length === 0 ? (
         <EmptyState
           icon={<Package className="h-8 w-8" />}
-          title="No products found"
-          description={`We couldn't find any products in this category yet. Check back soon for new arrivals!`}
+          title="No products match your selection"
+          description="Try clearing or adjusting your filters to see more pieces from this collection."
         />
       ) : (
         <>
@@ -90,7 +105,7 @@ function CategoryContent({ category, title, description }: CategoryPageProps) {
                 currentPage={data.pagination.page}
                 totalPages={data.pagination.totalPages}
                 baseUrl={`/${category}`}
-                params={sort ? { sort } : {}}
+                params={paginationParams}
               />
             </div>
           )}

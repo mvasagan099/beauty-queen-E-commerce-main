@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { cartApi } from "@/lib/api";
-import { CartResponse } from "@/types";
+import { CartItem, CartResponse } from "@/types";
 import { Button } from "@/components/ui/button";
-import { useCheckoutStore } from "@/store";
+import { useAuthStore, useCheckoutStore, useGuestCartStore } from "@/store";
 import { CartList } from "@/components/cart/CartList";
 import { CartSummary } from "@/components/cart/CartSummary";
 import { LoadingPage } from "@/components/ui/spinner";
@@ -16,35 +17,75 @@ import { ShoppingCart } from "lucide-react";
 export default function CartPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
   const setCartMode = useCheckoutStore((s) => s.setCartMode);
+
+  const guestItems = useGuestCartStore((s) => s.items);
+  const updateGuestItem = useGuestCartStore((s) => s.updateItem);
+  const removeGuestItem = useGuestCartStore((s) => s.removeItem);
+
+  const isCustomer = !!user && user.role === "CUSTOMER";
 
   const { data, isLoading } = useQuery<{ success: boolean; data: CartResponse }>({
     queryKey: ["cart"],
     queryFn: () => cartApi.get(),
+    enabled: isCustomer,
   });
 
   const removeMutation = useMutation({
     mutationFn: (itemId: number) => cartApi.remove(itemId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cart"] });
+      toast.success("Item removed from bag");
+    },
+    onError: (err: Error) => toast.error(err.message || "Could not remove item"),
   });
 
   const updateMutation = useMutation({
-    mutationFn: (args: { itemId: number; quantity: number }) =>
-      cartApi.update(args.itemId, args.quantity),
+    mutationFn: (args: { itemId: number; quantity: number; size?: string }) =>
+      cartApi.update(args.itemId, args.quantity, args.size),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
+    onError: (err: Error) => toast.error(err.message || "Could not update item"),
   });
 
-  if (isLoading) {
+  if (isCustomer && isLoading) {
     return <LoadingPage text="Loading your cart..." />;
   }
 
-  const cart = data?.data;
-  const items = cart?.items || [];
+  const items: CartItem[] = isCustomer
+    ? data?.data?.items || []
+    : guestItems.map((g) => ({
+        ...g,
+        subtotal: g.price * g.quantity,
+      }));
+
+  const subtotal = isCustomer
+    ? data?.data?.subtotal || 0
+    : items.reduce((sum, i) => sum + i.subtotal, 0);
+
+  const discount = isCustomer
+    ? data?.data?.discount || 0
+    : items.reduce((sum, i) => {
+        const mrp = i.mrp && i.mrp > i.price ? i.mrp : i.price;
+        return sum + (mrp - i.price) * i.quantity;
+      }, 0);
+
+  const shipping = isCustomer ? data?.data?.shipping || 0 : 0;
+  const tax = isCustomer ? data?.data?.tax || 0 : 0;
+  const total = isCustomer ? data?.data?.total || 0 : subtotal;
+  const totalItemCount = items.reduce((sum, i) => sum + i.quantity, 0);
   const updating = removeMutation.isPending || updateMutation.isPending;
 
   return (
     <div className="page-container">
-      <h1 className="page-title">Shopping Cart</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-8">
+        <h1 className="page-title mb-0">Shopping Cart</h1>
+        {!isCustomer && items.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Saved on this device — sign in at checkout to sync your bag.
+          </p>
+        )}
+      </div>
 
       {items.length === 0 ? (
         <EmptyState
@@ -65,22 +106,45 @@ export default function CartPage() {
             <CartList
               items={items}
               updating={updating}
-              onQuantityChange={(itemId, quantity) =>
-                updateMutation.mutate({ itemId, quantity })
-              }
-              onRemove={(itemId) => removeMutation.mutate(itemId)}
+              onQuantityChange={(itemId, quantity) => {
+                if (isCustomer) {
+                  updateMutation.mutate({ itemId, quantity });
+                } else {
+                  updateGuestItem(itemId, quantity);
+                }
+              }}
+              onSizeChange={(itemId, size, quantity) => {
+                if (isCustomer) {
+                  updateMutation.mutate({ itemId, quantity, size });
+                } else {
+                  updateGuestItem(itemId, quantity, size);
+                }
+              }}
+              onRemove={(itemId) => {
+                if (isCustomer) {
+                  removeMutation.mutate(itemId);
+                } else {
+                  removeGuestItem(itemId);
+                  toast.success("Item removed from bag");
+                }
+              }}
             />
           </div>
 
           <div>
             <CartSummary
-              itemCount={items.length}
-              subtotal={cart?.subtotal || 0}
-              discount={cart?.discount || 0}
-              shipping={cart?.shipping || 0}
-              tax={cart?.tax || 0}
-              total={cart?.total || 0}
+              itemCount={totalItemCount}
+              subtotal={subtotal}
+              discount={discount}
+              shipping={shipping}
+              tax={tax}
+              total={total}
+              ctaLabel={isCustomer ? "Proceed to Checkout" : "Sign In to Checkout"}
               onCheckout={() => {
+                if (!isCustomer) {
+                  router.push("/login?redirect=/checkout");
+                  return;
+                }
                 setCartMode();
                 router.push("/checkout");
               }}

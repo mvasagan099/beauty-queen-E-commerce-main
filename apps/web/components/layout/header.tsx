@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useAuthStore } from "@/store";
+import { useAuthStore, useGuestCartStore } from "@/store";
 import { useQuery } from "@tanstack/react-query";
 import { authApi, getSellerToken, cartApi, sellersApi } from "@/lib/api";
 import {
@@ -30,6 +30,7 @@ const categories = [
 
 export default function Header() {
   const { user, setUser, logout } = useAuthStore();
+  const guestCartItems = useGuestCartStore((s) => s.items);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sellerLoggedIn, setSellerLoggedIn] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -50,10 +51,14 @@ export default function Header() {
   const { data: cartResponse } = useQuery({
     queryKey: ["cart"],
     queryFn: () => cartApi.get(),
-    enabled: !!user,
+    enabled: !!user && user.role === "CUSTOMER",
   });
 
-  const cartCount = cartResponse?.data?.itemCount || 0;
+  const guestCartCount = guestCartItems.reduce((sum, i) => sum + i.quantity, 0);
+  const cartCount =
+    user && user.role === "CUSTOMER"
+      ? cartResponse?.data?.itemCount || 0
+      : guestCartCount;
 
   useEffect(() => {
     if (userData?.user) {
@@ -117,12 +122,12 @@ export default function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm">
+      <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-[#FBF7F2]/95 backdrop-blur supports-[backdrop-filter]:bg-[#FBF7F2]/85 shadow-sm">
         <div className="container-page">
           <div className="flex h-16 items-center justify-between gap-2">
             <Link
               href="/"
-              className="text-xl font-bold text-primary flex-shrink-0 tracking-tight"
+              className="font-display text-2xl font-semibold text-primary flex-shrink-0 tracking-tight"
               aria-label="Beauty Queen - Home"
             >
               Beauty Queen

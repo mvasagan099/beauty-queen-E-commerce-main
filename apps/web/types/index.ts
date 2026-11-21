@@ -102,6 +102,8 @@ export interface CartItem {
   size: string;
   quantity: number;
   subtotal: number;
+  availableStock?: number;
+  availableSizes?: string[];
 }
 
 export interface CartResponse {

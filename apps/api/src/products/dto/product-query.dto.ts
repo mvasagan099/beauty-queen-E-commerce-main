@@ -69,4 +69,10 @@ export class ProductQueryDto {
   @IsOptional()
   @IsBooleanString()
   inStock?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by available size (S, M, L, XL, XXL, FREE_SIZE)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  size?: string;
 }

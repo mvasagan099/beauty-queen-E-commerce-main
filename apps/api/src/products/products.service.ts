@@ -5,6 +5,7 @@ import { ImageService } from '../common/image.service';
 import { SearchService } from '../search/search.service';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/types/audit.types';
+import { resolveProductSize, tryResolveProductSize } from '../common/product-size.util';
 
 @Injectable()
 export class ProductsService {
@@ -41,6 +42,7 @@ export class ProductsService {
     minPrice?: number;
     maxPrice?: number;
     inStock?: boolean;
+    size?: string;
   }) {
     const where: any = this.inStockWhere();
 
@@ -66,6 +68,14 @@ export class ProductsService {
       if (params.maxPrice != null) priceFilter.lte = params.maxPrice;
       where.AND = where.AND || [];
       where.AND.push({ price: priceFilter });
+    }
+
+    if (params?.size) {
+      const resolvedSize = tryResolveProductSize(params.size);
+      if (resolvedSize) {
+        where.AND = where.AND || [];
+        where.AND.push({ [resolvedSize.prismaField]: { gt: 0 } });
+      }
     }
 
     let orderBy: any = { id: 'desc' };
@@ -122,6 +132,9 @@ export class ProductsService {
     if (product.sizeL && product.sizeL > 0) sizes.push('Large');
     if (product.sizeXl && product.sizeXl > 0) sizes.push('XL');
     if (product.sizeXxl && product.sizeXxl > 0) sizes.push('XXL');
+    if (sizes.length === 0 && product.quantity && product.quantity > 0) {
+      sizes.push('FREE_SIZE');
+    }
 
     const relatedProducts = await this.getRelatedProducts(id);
 
@@ -517,28 +530,15 @@ export class ProductsService {
   }
 
   async getAvailableSizeQty(product: any, size: string): Promise<number> {
-    const normalized = size.toLowerCase();
-    const sizeMap: Record<string, number> = {
-      s: product.sizeS || 0,
-      small: product.sizeS || 0,
-      m: product.sizeM || 0,
-      medium: product.sizeM || 0,
-      l: product.sizeL || 0,
-      large: product.sizeL || 0,
-      xl: product.sizeXl || 0,
-      xxl: product.sizeXxl || 0,
-    };
-    return sizeMap[normalized] || 0;
+    const resolved = tryResolveProductSize(size);
+    if (!resolved) return 0;
+    return product?.[resolved.prismaField] || 0;
   }
 
   async validateSize(product: any, size: string): Promise<void> {
-    const validSizes = ['S', 'M', 'L', 'XL', 'XXL', 'Small', 'Medium', 'Large'];
-    const normalized = size.toUpperCase().replace('SMALL', 'S').replace('MEDIUM', 'M').replace('LARGE', 'L');
-    if (!validSizes.includes(size) && !['S', 'M', 'L', 'XL', 'XXL'].includes(normalized)) {
-      throw new BadRequestException(`Invalid size: ${size}. Valid sizes: S, M, L, XL, XXL`);
-    }
+    const { canonicalSize } = resolveProductSize(size);
 
-    const qty = await this.getAvailableSizeQty(product, size);
+    const qty = await this.getAvailableSizeQty(product, canonicalSize);
     if (qty <= 0) {
       throw new BadRequestException(`Size ${size} is not available for this product`);
     }

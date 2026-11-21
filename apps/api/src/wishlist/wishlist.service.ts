@@ -78,7 +78,10 @@ export class WishlistService {
       ['XL', 'sizeXl', product.sizeXl],
       ['XXL', 'sizeXxl', product.sizeXxl],
     ];
-    const size = sizeFields.find(([, , stock]) => (stock ?? 0) > 0)?.[0];
+    let size = sizeFields.find(([, , stock]) => (stock ?? 0) > 0)?.[0];
+    if (!size && (product.quantity ?? 0) > 0) {
+      size = 'FREE_SIZE';
+    }
 
     if (!size) {
       throw new BadRequestException('This product is currently out of stock');

@@ -4,34 +4,34 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --background: 34 46% 97%;
+    --foreground: 338 25% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --primary: 330 80% 64%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
+    --card-foreground: 338 25% 14%;
+    --primary: 343 72% 38%;
+    --primary-foreground: 34 46% 98%;
+    --secondary: 33 28% 92%;
+    --secondary-foreground: 338 25% 14%;
+    --muted: 33 24% 93%;
+    --muted-foreground: 340 13% 38%;
+    --accent: 38 60% 58%;
+    --accent-foreground: 340 41% 8%;
+    --destructive: 0 76% 48%;
     --destructive-foreground: 0 0% 98%;
-    --success: 142 76% 36%;
+    --success: 148 64% 32%;
     --success-foreground: 0 0% 98%;
-    --warning: 38 92% 50%;
+    --warning: 38 92% 48%;
     --warning-foreground: 0 0% 98%;
-    --info: 217 91% 60%;
+    --info: 217 84% 52%;
     --info-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 330 80% 64%;
+    --border: 33 20% 87%;
+    --input: 33 20% 85%;
+    --ring: 343 72% 38%;
     --radius: 0.5rem;
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --shadow-sm: 0 1px 2px 0 rgb(26 11 16 / 0.05);
+    --shadow: 0 2px 6px -1px rgb(26 11 16 / 0.08), 0 1px 3px -1px rgb(26 11 16 / 0.06);
+    --shadow-md: 0 8px 18px -4px rgb(26 11 16 / 0.1), 0 3px 6px -3px rgb(26 11 16 / 0.06);
+    --shadow-lg: 0 20px 36px -8px rgb(26 11 16 / 0.16), 0 8px 16px -6px rgb(26 11 16 / 0.08);
   }
 }
 
@@ -41,7 +41,7 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   }
 }
 
@@ -59,11 +59,11 @@
   }
 
   .section-title {
-    @apply text-2xl font-bold text-foreground;
+    @apply font-display text-3xl sm:text-4xl font-semibold tracking-tight text-foreground;
   }
 
   .section-subtitle {
-    @apply text-sm text-muted-foreground;
+    @apply text-sm sm:text-base text-muted-foreground;
   }
 
   .page-container {
@@ -71,7 +71,7 @@
   }
 
   .page-title {
-    @apply text-3xl font-bold text-foreground mb-8;
+    @apply font-display text-3xl sm:text-4xl font-semibold tracking-tight text-foreground mb-8;
   }
 
   .card-hover {
@@ -84,6 +84,23 @@
 }
 
 @layer utilities {
+  .perspective-1200 {
+    perspective: 1200px;
+  }
+
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+
+  .atelier-grain {
+    background-image: radial-gradient(rgba(212, 163, 83, 0.08) 1px, transparent 0);
+    background-size: 28px 28px;
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
   }
@@ -97,7 +114,14 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgb(0 0 0 / 0.15);
+    background-color: rgb(26 11 16 / 0.18);
     border-radius: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-safe-3d {
+    transform: none !important;
+    transition: none !important;
   }
 }

@@ -13,6 +13,7 @@ import { CartService } from '../cart/cart.service';
 import { PricingService } from '../pricing/pricing.service';
 import { CouponsService } from '../coupons/coupons.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { resolveProductSize } from '../common/product-size.util';
 import {
   CreateCheckoutDto,
   VerifyPaymentDto,
@@ -113,15 +114,15 @@ export class PaymentsService {
           throw new BadRequestException(`Product ${item.productId} not found`);
         }
 
-        const sizeField = this.getSizeField(item.size);
+        const { prismaField: sizeField, dbColumn, canonicalSize } = resolveProductSize(item.size);
         const lockedRows = await tx.$queryRawUnsafe(
-          `SELECT ${sizeField} AS qty FROM products WHERE id = ? FOR UPDATE`,
+          `SELECT ${dbColumn} AS qty FROM products WHERE id = ? FOR UPDATE`,
           item.productId,
         );
         const lockedQty = (lockedRows as any)[0]?.qty ?? 0;
         if (lockedQty < item.quantity) {
           throw new BadRequestException(
-            `Insufficient stock for ${product.name} (${item.size}). Available: ${lockedQty}`,
+            `Insufficient stock for ${product.name} (${canonicalSize}). Available: ${lockedQty}`,
           );
         }
 
@@ -136,7 +137,7 @@ export class PaymentsService {
             productId: item.productId,
             sellerId: product.sellerId,
             name: item.name,
-            size: item.size,
+            size: canonicalSize,
             price: item.price,
             quantity: item.quantity,
             subtotal: orderItemPricing?.lineTotal || item.price * item.quantity,
@@ -884,23 +885,5 @@ export class PaymentsService {
         throw new ForbiddenException('Payment does not belong to this user');
       }
     }
-  }
-
-  private getSizeField(size: string): string {
-    const sizeMap: Record<string, string> = {
-      small: 'sizeS',
-      medium: 'sizeM',
-      large: 'sizeL',
-      xl: 'sizeXl',
-      xxl: 'sizeXxl',
-      s: 'sizeS',
-      m: 'sizeM',
-      l: 'sizeL',
-    };
-    const field = sizeMap[size.toLowerCase()];
-    if (!field) {
-      throw new BadRequestException(`Invalid size: ${size}`);
-    }
-    return field;
   }
 }

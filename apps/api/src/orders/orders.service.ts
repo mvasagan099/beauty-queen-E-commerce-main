@@ -518,6 +518,62 @@ export class OrdersService {
     return this.updateOrderStatus(id, status, sellerId, 'SELLER');
   }
 
+  async getGroupedOrdersByUser(user: { sub: number; email: string }) {
+    const orders = await this.getOrdersByUser(user);
+    const groupMap = new Map<
+      string,
+      {
+        groupId: string;
+        checkoutId: string | null;
+        orderDate: Date | string | null;
+        paymentMethod: string | null;
+        paymentStatus: string;
+        overallStatus: string;
+        itemCount: number;
+        totalAmount: number;
+        items: any[];
+      }
+    >();
+
+    for (const order of orders as any[]) {
+      const key = order.checkoutId ? `chk_${order.checkoutId}` : `ord_${order.id}`;
+      const lineTotal =
+        Number(order.subtotal) ||
+        Number(order.price || 0) * Number(order.quantity || 1) ||
+        0;
+
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          groupId: order.checkoutId ? `BQ-${order.checkoutId.slice(0, 8).toUpperCase()}` : `BQ-${order.id}`,
+          checkoutId: order.checkoutId || null,
+          orderDate: order.orderDate || null,
+          paymentMethod: order.paymentMethod || null,
+          paymentStatus: order.paymentStatus || 'Pending',
+          overallStatus: order.status || 'Pending',
+          itemCount: Number(order.quantity || 1),
+          totalAmount: Number(order.totalAmount) || lineTotal,
+          items: [order],
+        });
+      } else {
+        const g = groupMap.get(key)!;
+        g.items.push(order);
+        g.itemCount += Number(order.quantity || 1);
+        if (!Number(order.totalAmount)) {
+          g.totalAmount += lineTotal;
+        }
+        // Derive group status: if all delivered -> Delivered; if mixed -> Processing/Partially Shipped
+        const statuses = new Set(g.items.map((i) => i.status));
+        if (statuses.size === 1) {
+          g.overallStatus = order.status;
+        } else if (statuses.has('Shipped') || statuses.has('Delivered')) {
+          g.overallStatus = 'Processing';
+        }
+      }
+    }
+
+    return Array.from(groupMap.values());
+  }
+
   private getSizeField(size: string): string {
     const sizeMap: Record<string, string> = {
       small: 'sizeS',
@@ -528,8 +584,15 @@ export class OrdersService {
       s: 'sizeS',
       m: 'sizeM',
       l: 'sizeL',
+      free_size: 'quantity',
+      'free size': 'quantity',
+      freesize: 'quantity',
+      one_size: 'quantity',
+      'one size': 'quantity',
+      onesize: 'quantity',
+      standard: 'quantity',
     };
-    const field = sizeMap[size.toLowerCase()];
+    const field = sizeMap[size.trim().toLowerCase().replace(/-/g, '_')];
     if (!field) {
       throw new BadRequestException(`Invalid size: ${size}`);
     }

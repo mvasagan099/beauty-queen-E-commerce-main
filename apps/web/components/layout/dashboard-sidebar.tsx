@@ -150,6 +150,11 @@ export const adminSidebarItems: SidebarItem[] = [
     icon: <Package className="h-4 w-4" />,
   },
   {
+    label: "Categories",
+    href: "/admin/categories",
+    icon: <Boxes className="h-4 w-4" />,
+  },
+  {
     label: "Orders",
     href: "/admin/orders",
     icon: <ShoppingCart className="h-4 w-4" />,

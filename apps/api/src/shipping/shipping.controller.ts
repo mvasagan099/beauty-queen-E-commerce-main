@@ -1,5 +1,5 @@
-import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, Get, Put, Body, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ShippingService } from './shipping.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
@@ -28,9 +28,42 @@ export class ShippingController {
   }
 
   @Get('calculate')
-  @ApiOperation({ summary: 'Calculate shipping charge' })
-  async calculate(@Body() body: { subtotal: number; pincode?: string }) {
-    const charge = await this.shippingService.calculateShipping(body.subtotal, body.pincode);
-    return { success: true, charge, freeShipping: charge === 0 };
+  @ApiOperation({ summary: 'Calculate shipping charge and delivery ETA by pincode' })
+  @ApiQuery({ name: 'subtotal', required: false })
+  @ApiQuery({ name: 'pincode', required: false })
+  async calculate(
+    @Query('subtotal') subtotalQuery?: string,
+    @Query('pincode') pincodeQuery?: string,
+    @Body() body?: { subtotal?: number; pincode?: string },
+  ) {
+    const rawSubtotal = subtotalQuery != null ? Number(subtotalQuery) : Number(body?.subtotal ?? 0);
+    const subtotal = Number.isFinite(rawSubtotal) && rawSubtotal >= 0 ? rawSubtotal : 0;
+    const pincode = (pincodeQuery ?? body?.pincode ?? '').trim();
+
+    const isValidIndianPincode = /^[1-9]\d{5}$/.test(pincode);
+    const charge = await this.shippingService.calculateShipping(
+      subtotal,
+      isValidIndianPincode ? pincode : undefined,
+    );
+
+    // Estimate delivery window based on Tamil Nadu origin (600–643) vs South India vs Pan-India
+    let estimatedDays = '4–6 business days';
+    if (isValidIndianPincode) {
+      const prefix = Number(pincode.substring(0, 2));
+      if (prefix >= 60 && prefix <= 64) {
+        estimatedDays = '2–3 business days';
+      } else if (prefix >= 50 && prefix <= 69) {
+        estimatedDays = '3–4 business days';
+      }
+    }
+
+    return {
+      success: true,
+      charge,
+      freeShipping: charge === 0,
+      serviceable: pincode ? isValidIndianPincode : true,
+      estimatedDays,
+      codAvailable: isValidIndianPincode,
+    };
   }
 }

@@ -2,6 +2,10 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
 import { AddToCartDto } from './dto/cart.dto';
+import {
+  getAvailableSizesForProduct,
+  resolveProductSize,
+} from '../common/product-size.util';
 
 export interface CartItemResponse {
   id: number;
@@ -13,6 +17,8 @@ export interface CartItemResponse {
   size: string;
   quantity: number;
   subtotal: number;
+  availableStock: number;
+  availableSizes: string[];
 }
 
 export interface CartResponse {
@@ -40,10 +46,16 @@ export class CartService {
       include: { product: true },
     });
 
-    const itemsWithTotals: CartItemResponse[] = items
-      .filter((item) => item.product && !item.product.deletedAt)
-      .map((item) => {
+    const activeItems = items.filter((item) => item.product && !item.product.deletedAt);
+
+    const itemsWithTotals: CartItemResponse[] = await Promise.all(
+      activeItems.map(async (item) => {
         const price = item.product.price || 0;
+        const availableStock = await this.productsService.getAvailableSizeQty(
+          item.product,
+          item.size,
+        );
+        const availableSizes = getAvailableSizesForProduct(item.product).map((s) => s.size);
         return {
           id: item.id,
           productId: item.productId,
@@ -54,22 +66,27 @@ export class CartService {
           size: item.size,
           quantity: item.quantity,
           subtotal: price * item.quantity,
+          availableStock,
+          availableSizes,
         };
-      });
+      }),
+    );
 
     const subtotal = itemsWithTotals.reduce((sum, item) => sum + item.subtotal, 0);
     const mrpTotal = itemsWithTotals.reduce((sum, item) => {
-      const mrp = item.mrp || item.price;
+      const mrp = item.mrp && item.mrp > item.price ? item.mrp : item.price;
       return sum + mrp * item.quantity;
     }, 0);
+    // `subtotal` already reflects selling prices; `discount` is informational MRP savings
+    // and must NOT be subtracted a second time from `subtotal`.
     const discount = Math.max(0, mrpTotal - subtotal);
     const shipping = 0;
     const tax = 0;
-    const total = subtotal - discount + shipping + tax;
+    const total = Math.max(0, subtotal + shipping + tax);
 
     return {
       items: itemsWithTotals,
-      itemCount: itemsWithTotals.length,
+      itemCount: itemsWithTotals.reduce((sum, item) => sum + item.quantity, 0),
       subtotal,
       discount,
       shipping,
@@ -86,14 +103,11 @@ export class CartService {
       throw new NotFoundException('Product not found');
     }
 
-    const validSizes = ['S', 'M', 'L', 'XL', 'XXL'];
-    if (!validSizes.includes(dto.size)) {
-      throw new BadRequestException(`Invalid size: ${dto.size}. Valid sizes: ${validSizes.join(', ')}`);
-    }
+    const { canonicalSize } = resolveProductSize(dto.size);
 
-    const availableQty = await this.productsService.getAvailableSizeQty(product, dto.size);
+    const availableQty = await this.productsService.getAvailableSizeQty(product, canonicalSize);
     if (availableQty <= 0) {
-      throw new BadRequestException(`Size ${dto.size} is out of stock`);
+      throw new BadRequestException(`Size ${canonicalSize} is out of stock`);
     }
 
     const existingItem = await this.prisma.cartItem.findUnique({
@@ -101,7 +115,7 @@ export class CartService {
         userId_productId_size: {
           userId,
           productId: dto.productId,
-          size: dto.size,
+          size: canonicalSize,
         },
       },
     });
@@ -130,7 +144,7 @@ export class CartService {
       data: {
         userId,
         productId: dto.productId,
-        size: dto.size,
+        size: canonicalSize,
         quantity: dto.quantity,
       },
       include: { product: true },
@@ -154,7 +168,7 @@ export class CartService {
     return { success: true, message: 'Cart cleared' };
   }
 
-  async updateQuantity(userId: number, itemId: number, quantity: number) {
+  async updateQuantity(userId: number, itemId: number, quantity: number, newSize?: string) {
     const item = await this.prisma.cartItem.findFirst({
       where: { id: itemId, userId },
       include: { product: true },
@@ -168,7 +182,43 @@ export class CartService {
       return { success: true, message: 'Item removed from cart' };
     }
 
-    const availableQty = await this.productsService.getAvailableSizeQty(item.product, item.size);
+    const targetSize = newSize ? resolveProductSize(newSize).canonicalSize : item.size;
+    const availableQty = await this.productsService.getAvailableSizeQty(item.product, targetSize);
+
+    if (availableQty <= 0) {
+      throw new BadRequestException(`Size ${targetSize} is out of stock`);
+    }
+
+    // If size changed, merge cleanly if the user already has that product+size in cart
+    if (targetSize !== item.size) {
+      const conflictingItem = await this.prisma.cartItem.findUnique({
+        where: {
+          userId_productId_size: {
+            userId,
+            productId: item.productId,
+            size: targetSize,
+          },
+        },
+      });
+
+      if (conflictingItem && conflictingItem.id !== item.id) {
+        const mergedQty = conflictingItem.quantity + quantity;
+        if (mergedQty > availableQty) {
+          throw new BadRequestException(
+            `Requested quantity (${mergedQty}) exceeds available stock (${availableQty})`,
+          );
+        }
+        return this.prisma.$transaction(async (tx) => {
+          await tx.cartItem.delete({ where: { id: item.id } });
+          return tx.cartItem.update({
+            where: { id: conflictingItem.id },
+            data: { quantity: mergedQty },
+            include: { product: true },
+          });
+        });
+      }
+    }
+
     if (quantity > availableQty) {
       throw new BadRequestException(
         `Requested quantity (${quantity}) exceeds available stock (${availableQty})`,
@@ -177,7 +227,7 @@ export class CartService {
 
     return this.prisma.cartItem.update({
       where: { id: item.id },
-      data: { quantity },
+      data: { quantity, size: targetSize },
       include: { product: true },
     });
   }

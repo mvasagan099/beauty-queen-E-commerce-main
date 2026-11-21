@@ -19,11 +19,37 @@ export function clearSellerToken() {
   localStorage.removeItem("seller_info");
 }
 
+function readCsrfCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 class ApiClient {
   private baseUrl: string;
+  private csrfFetchPromise: Promise<string | null> | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
+  }
+
+  private async ensureCsrfToken(): Promise<string | null> {
+    if (typeof window === "undefined") return null;
+    const existing = readCsrfCookie();
+    if (existing) return existing;
+    if (!this.csrfFetchPromise) {
+      this.csrfFetchPromise = fetch(`${this.baseUrl}/csrf`, {
+        method: "GET",
+        credentials: "include",
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => (data?.csrfToken as string) || readCsrfCookie())
+        .catch(() => null)
+        .finally(() => {
+          this.csrfFetchPromise = null;
+        });
+    }
+    return this.csrfFetchPromise;
   }
 
   private async request<T = any>(
@@ -40,6 +66,16 @@ class ApiClient {
     if (json) {
       headers["Content-Type"] = "application/json";
       fetchOptions.body = JSON.stringify(json);
+    }
+
+    if (
+      ["POST", "PUT", "PATCH", "DELETE"].includes(method) &&
+      !headers["x-csrf-token"]
+    ) {
+      const csrfToken = await this.ensureCsrfToken();
+      if (csrfToken) {
+        headers["x-csrf-token"] = csrfToken;
+      }
     }
 
     const sellerToken = getSellerToken();
@@ -186,8 +222,8 @@ export const cartApi = {
   get: () => api.get("/cart"),
   add: (productId: number, size: string, quantity: number) =>
     api.post("/cart", { productId, size, quantity }),
-  update: (itemId: number, quantity: number) =>
-    api.put(`/cart/${itemId}`, { quantity }),
+  update: (itemId: number, quantity: number, size?: string) =>
+    api.put(`/cart/${itemId}`, size ? { quantity, size } : { quantity }),
   remove: (itemId: number) =>
     api.delete(`/cart/${itemId}`),
   clear: () => api.delete("/cart"),

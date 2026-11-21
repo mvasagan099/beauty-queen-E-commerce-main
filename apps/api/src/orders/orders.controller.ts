@@ -28,6 +28,18 @@ export class OrdersController {
     return { success: true, orders };
   }
 
+  @Get('grouped')
+  @UseGuards(RolesGuard)
+  @Roles(Role.CUSTOMER)
+  @ApiOperation({ summary: 'Get customer orders grouped by checkout session' })
+  async getGroupedUserOrders(@Request() req: any) {
+    const groups = await this.ordersService.getGroupedOrdersByUser({
+      sub: req.user.sub,
+      email: req.user.email,
+    });
+    return { success: true, groups };
+  }
+
   @Get('all')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)

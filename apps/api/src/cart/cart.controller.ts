@@ -28,13 +28,18 @@ export class CartController {
   }
 
   @Put(':itemId')
-  @ApiOperation({ summary: 'Update cart item quantity' })
+  @ApiOperation({ summary: 'Update cart item quantity or size' })
   async updateQuantity(
     @Request() req: any,
     @Param('itemId', ParseIntPipe) itemId: number,
     @Body() dto: UpdateCartDto,
   ) {
-    const item = await this.cartService.updateQuantity(req.user.sub, itemId, dto.quantity);
+    const item = await this.cartService.updateQuantity(
+      req.user.sub,
+      itemId,
+      dto.quantity,
+      dto.size,
+    );
     return { success: true, message: 'Cart updated', item };
   }
 

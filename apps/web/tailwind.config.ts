@@ -9,7 +9,19 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        display: ["var(--font-display)", "Georgia", "serif"],
+        sans: ["var(--font-sans)", "system-ui", "-apple-system", "sans-serif"],
+      },
       colors: {
+        atelier: {
+          plum: "#1A0B10",
+          silk: "#FBF7F2",
+          crimson: "#A81C44",
+          zari: "#D4A353",
+          ink: "#2D1B22",
+          rose: "#6B535B",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

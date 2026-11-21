@@ -22,6 +22,7 @@ export interface ProductListParams {
   minPrice?: number;
   maxPrice?: number;
   inStock?: boolean;
+  size?: string;
 }
 
 export const productService = {
@@ -35,6 +36,7 @@ export const productService = {
     if (params?.minPrice != null) searchParams.set("minPrice", String(params.minPrice));
     if (params?.maxPrice != null) searchParams.set("maxPrice", String(params.maxPrice));
     if (params?.inStock) searchParams.set("inStock", "true");
+    if (params?.size) searchParams.set("size", params.size);
     const qs = searchParams.toString();
     return api.get(`/products${qs ? `?${qs}` : ""}`);
   },

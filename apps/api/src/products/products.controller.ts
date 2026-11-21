@@ -38,6 +38,7 @@ export class ProductsController {
   @ApiQuery({ name: 'minPrice', required: false })
   @ApiQuery({ name: 'maxPrice', required: false })
   @ApiQuery({ name: 'inStock', required: false })
+  @ApiQuery({ name: 'size', required: false })
   async findAll(@Query() query: ProductQueryDto) {
     const safePage = Math.max(1, Math.floor(Number(query.page) || 1));
     const safeLimit = Math.min(MAX_LIMIT, Math.max(1, Math.floor(Number(query.limit) || 20)));
@@ -62,6 +63,10 @@ export class ProductsController {
     const safeMinPrice = query.minPrice != null ? Math.max(0, Number(query.minPrice) || 0) : undefined;
     const safeMaxPrice = query.maxPrice != null ? Math.max(0, Number(query.maxPrice) || 0) : undefined;
     const safeInStock = query.inStock === 'true' ? true : undefined;
+    const safeSize =
+      query.size && typeof query.size === 'string' && query.size.trim().length > 0
+        ? query.size.trim().substring(0, 20)
+        : undefined;
 
     const result = await this.productsService.findAll({
       category: safeCategory,
@@ -73,6 +78,7 @@ export class ProductsController {
       minPrice: safeMinPrice,
       maxPrice: safeMaxPrice,
       inStock: safeInStock,
+      size: safeSize,
     });
     return { success: true, ...result };
   }

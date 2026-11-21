@@ -14,6 +14,7 @@ interface CartSummaryProps {
   tax: number;
   total: number;
   onCheckout: () => void;
+  ctaLabel?: string;
 }
 
 export function CartSummary({
@@ -24,26 +25,29 @@ export function CartSummary({
   tax,
   total,
   onCheckout,
+  ctaLabel = "Proceed to Checkout",
 }: CartSummaryProps) {
   return (
     <Card className="sticky top-24">
       <CardHeader className="pb-4">
-        <CardTitle className="text-lg">Order Summary</CardTitle>
+        <CardTitle className="font-display text-2xl">Order Summary</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 tabular-nums">
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Subtotal ({itemCount} {itemCount === 1 ? "item" : "items"})</span>
+          <span className="text-muted-foreground">
+            Subtotal ({itemCount} {itemCount === 1 ? "item" : "items"})
+          </span>
           <span className="font-medium">{formatPrice(subtotal)}</span>
         </div>
         {discount > 0 && (
-          <div className="flex justify-between text-sm text-green-600">
-            <span>Discount</span>
-            <span className="font-medium">-{formatPrice(discount)}</span>
+          <div className="flex justify-between text-sm text-emerald-700">
+            <span>You save on MRP</span>
+            <span className="font-medium">{formatPrice(discount)}</span>
           </div>
         )}
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Shipping</span>
-          <span className="text-green-600 font-medium">
+          <span className="text-emerald-700 font-medium">
             {shipping === 0 ? "Free" : formatPrice(shipping)}
           </span>
         </div>
@@ -63,11 +67,11 @@ export function CartSummary({
           onClick={onCheckout}
           size="lg"
         >
-          Proceed to Checkout
+          {ctaLabel}
         </Button>
         <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground pt-1">
           <ShieldCheck className="h-3.5 w-3.5" />
-          <span>Secure checkout</span>
+          <span>Razorpay UPI &amp; COD verified checkout</span>
         </div>
       </CardContent>
     </Card>

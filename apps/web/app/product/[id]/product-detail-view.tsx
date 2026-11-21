@@ -3,17 +3,24 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { productsApi, cartApi, wishlistApi, alertsApi } from "@/lib/api";
 import { Product } from "@/types";
-import { formatPrice, getProductImageUrl } from "@/lib/utils";
+import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useAuthStore, useCheckoutStore } from "@/store";
+import {
+  useAuthStore,
+  useCheckoutStore,
+  useGuestCartStore,
+  useUIStore,
+} from "@/store";
 import { Heart, Bell, BellOff } from "lucide-react";
 import { toast } from "sonner";
 import { RelatedProducts } from "@/components/product/RelatedProducts";
 import { FrequentlyBoughtTogether } from "@/components/product/FrequentlyBoughtTogether";
 import { RecentlyViewed } from "@/components/product/RecentlyViewed";
+import { ProductGallery } from "@/components/product/product-gallery";
+import { SizeGuideModal } from "@/components/product/SizeGuideModal";
+import { PincodeChecker } from "@/components/product/PincodeChecker";
 import { recordRecentlyViewed } from "@/lib/recently-viewed";
 import { ProductReviews } from "@/components/review/product-reviews";
 import { ReviewForm } from "@/components/review/review-form";
@@ -49,11 +56,11 @@ export default function ProductDetailView({
   const id = productId;
   const [selectedSize, setSelectedSize] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [activeImage, setActiveImage] = useState(0);
-  const [imgErrors, setImgErrors] = useState<Record<number, boolean>>({});
   const router = useRouter();
   const queryClient = useQueryClient();
   const setBuyNowItem = useCheckoutStore((s) => s.setBuyNowItem);
+  const addGuestItem = useGuestCartStore((s) => s.addItem);
+  const setCartOpen = useUIStore((s) => s.setCartOpen);
   const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
@@ -78,22 +85,50 @@ export default function ProductDetailView({
     enabled: !!id,
   });
 
+  const isCustomer = !!user && user.role === "CUSTOMER";
+
   const addToCartMutation = useMutation({
-    mutationFn: () => cartApi.add(id, selectedSize, quantity),
+    mutationFn: async (sizeToUse: string) => {
+      if (isCustomer) {
+        return cartApi.add(id, sizeToUse, quantity);
+      }
+      const pItem = product?.product;
+      const availableSizesList = sizeMap
+        .filter((s) => pItem && pItem[s.key] != null && (pItem[s.key] as number) > 0)
+        .map((s) => s.label);
+      addGuestItem({
+        productId: id,
+        name: pItem?.name || "Product",
+        price: pItem?.price || 0,
+        mrp: pItem?.mrp ?? null,
+        image: pItem?.image || pItem?.image1 || null,
+        size: sizeToUse,
+        quantity,
+        availableStock,
+        availableSizes: availableSizesList.length > 0 ? availableSizesList : ["FREE_SIZE"],
+      });
+      return { success: true };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cart"] });
-      router.push("/cart");
+      if (isCustomer) {
+        queryClient.invalidateQueries({ queryKey: ["cart"] });
+      }
+      toast.success("Added to your bag");
+      setCartOpen(true);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Could not add item to bag");
     },
   });
 
   const buyNowMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (sizeToUse: string) => {
       const price = product?.product?.price || 0;
       const mrp = product?.product?.mrp ?? null;
       setBuyNowItem({
         productId: id,
         name: product?.product?.name || "Product",
-        size: selectedSize,
+        size: sizeToUse,
         quantity,
         price,
         mrp,
@@ -237,58 +272,10 @@ const wishlistMutation = useMutation({
 
   const images = [p.image, p.image1, p.image2, p.image3, p.image4].filter(Boolean);
 
-  const handleImgError = (idx: number) => {
-    setImgErrors((prev) => ({ ...prev, [idx]: true }));
-  };
-
-  const getImgSrc = (img: string | null | undefined, idx: number) => {
-    if (imgErrors[idx]) return "https://placehold.co/600x800/fce7f3/ec4899?text=No+Image";
-    return getProductImageUrl(img);
-  };
-
   return (
     <div className="container-page py-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
-        <div>
-          <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-gray-100 mb-4">
-            <Image
-              src={getImgSrc(images[activeImage] || p.image, activeImage)}
-              alt={p.name || "Product image"}
-              fill
-              sizes="(max-width: 768px) 100vw, 50vw"
-              className="object-cover"
-              priority
-              onError={() => handleImgError(activeImage)}
-              unoptimized
-            />
-          </div>
-          {images.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-              {images.map((img, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveImage(i)}
-                  className={`relative h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${
-                    activeImage === i
-                      ? "border-primary ring-2 ring-primary/20"
-                      : "border-gray-200 hover:border-primary/40"
-                  }`}
-                  aria-label={`View image ${i + 1}`}
-                >
-                  <Image
-                    src={getImgSrc(img, i)}
-                    alt=""
-                    fill
-                    sizes="80px"
-                    className="object-cover"
-                    onError={() => handleImgError(i)}
-                    unoptimized
-                  />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <ProductGallery images={images} alt={p.name || "Product image"} />
 
         <div className="space-y-5">
           <div>
@@ -336,11 +323,14 @@ const wishlistMutation = useMutation({
             <p className="text-muted-foreground leading-relaxed whitespace-pre-line">{p.description}</p>
           )}
 
-          {availableSizes.length > 0 && (
+          {availableSizes.length > 0 ? (
             <div>
-              <h3 className="text-sm font-semibold text-foreground mb-3">
-                Select Size {!selectedSize && availableSizes.length > 0 && <span className="text-destructive">*</span>}
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Select Size {!selectedSize && availableSizes.length > 0 && <span className="text-destructive">*</span>}
+                </h3>
+                <SizeGuideModal category={p.ptype} />
+              </div>
               <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Product size">
                 {availableSizes.map((s) => (
                   <button
@@ -362,7 +352,17 @@ const wishlistMutation = useMutation({
                 <p className="text-xs text-muted-foreground mt-1.5">Please select a size to continue</p>
               )}
             </div>
-          )}
+          ) : !isOutOfStock ? (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-foreground">Fit</h3>
+                <SizeGuideModal category={p.ptype} />
+              </div>
+              <span className="inline-flex items-center rounded-lg border-2 border-primary bg-primary/5 px-4 py-2 text-sm font-medium text-primary">
+                Free Size / One Size
+              </span>
+            </div>
+          ) : null}
 
           <div>
             <h3 className="text-sm font-semibold text-foreground mb-3">Quantity</h3>
@@ -395,20 +395,29 @@ const wishlistMutation = useMutation({
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <Button
-              className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground h-12 text-base"
-              disabled={!selectedSize || addToCartMutation.isPending || isOutOfStock}
-              onClick={() => addToCartMutation.mutate()}
-            >
-              {addToCartMutation.isPending ? "Adding..." : isOutOfStock ? "Out of Stock" : "Add to Cart"}
-            </Button>
-            <Button
-              className="flex-1 bg-foreground hover:bg-foreground/90 text-background h-12 text-base"
-              disabled={!selectedSize || buyNowMutation.isPending || isOutOfStock}
-              onClick={() => buyNowMutation.mutate()}
-            >
-              {buyNowMutation.isPending ? "Processing..." : "Buy Now"}
-            </Button>
+            {(() => {
+              const effectiveSize =
+                availableSizes.length > 0 ? selectedSize : "FREE_SIZE";
+              const sizeMissing = availableSizes.length > 0 && !selectedSize;
+              return (
+                <>
+                  <Button
+                    className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground h-12 text-base"
+                    disabled={sizeMissing || addToCartMutation.isPending || isOutOfStock}
+                    onClick={() => addToCartMutation.mutate(effectiveSize)}
+                  >
+                    {addToCartMutation.isPending ? "Adding..." : isOutOfStock ? "Out of Stock" : "Add to Cart"}
+                  </Button>
+                  <Button
+                    className="flex-1 bg-foreground hover:bg-foreground/90 text-background h-12 text-base"
+                    disabled={sizeMissing || buyNowMutation.isPending || isOutOfStock}
+                    onClick={() => buyNowMutation.mutate(effectiveSize)}
+                  >
+                    {buyNowMutation.isPending ? "Processing..." : "Buy Now"}
+                  </Button>
+                </>
+              );
+            })()}
             {user && (
               <Button
                 variant="outline"
@@ -424,6 +433,8 @@ const wishlistMutation = useMutation({
               </Button>
             )}
           </div>
+
+          <PincodeChecker subtotal={(p.price ?? 0) * quantity} />
 
           {addToCartMutation.isError && (
             <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3">
