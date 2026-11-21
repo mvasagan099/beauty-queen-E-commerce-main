@@ -19,6 +19,7 @@ import {
   User,
   ScrollText,
   LifeBuoy,
+  Megaphone,
 } from "lucide-react";
 
 export interface SidebarItem {
@@ -153,6 +154,11 @@ export const adminSidebarItems: SidebarItem[] = [
     label: "Categories",
     href: "/admin/categories",
     icon: <Boxes className="h-4 w-4" />,
+  },
+  {
+    label: "Merchandising",
+    href: "/admin/merchandising",
+    icon: <Megaphone className="h-4 w-4" />,
   },
   {
     label: "Orders",

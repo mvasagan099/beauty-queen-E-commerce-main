@@ -8,6 +8,8 @@ import { Product } from "@/types";
 import { ProductGridSkeleton } from "@/components/ui/skeletons";
 import { AtelierHero } from "@/components/home/AtelierHero";
 import { AtelierRunway } from "@/components/home/AtelierRunway";
+import { FlashSaleBanner } from "@/components/home/FlashSaleBanner";
+import { AtelierStylistStudio } from "@/components/home/AtelierStylistStudio";
 
 function Section({
   title,
@@ -61,9 +63,13 @@ export default function HomePage() {
 
   return (
     <div>
+      {/* Merchandising Flash Sale Bar (renders when active) */}
+      <FlashSaleBanner />
+
       {/* Interactive 3D Couture Hero & Collection Runway always render immediately */}
       <AtelierHero />
       <AtelierRunway />
+      <AtelierStylistStudio />
 
       {/* Live Catalog Sections */}
       <div className="container-page">

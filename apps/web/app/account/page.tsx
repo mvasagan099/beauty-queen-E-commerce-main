@@ -18,6 +18,7 @@ import {
   LogOut,
   MessageSquare,
   ArrowRight,
+  Crown,
 } from "lucide-react";
 
 export default function AccountPage() {
@@ -56,6 +57,13 @@ export default function AccountPage() {
       icon: ShoppingBag,
       href: "/account/orders",
       color: "bg-primary/10 text-primary",
+    },
+    {
+      title: "Queen's Circle Rewards",
+      description: "Loyalty tier, points & referral bonus",
+      icon: Crown,
+      href: "/account/loyalty",
+      color: "bg-amber-100 text-amber-700",
     },
     {
       title: "Addresses",
