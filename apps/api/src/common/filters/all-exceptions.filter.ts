@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { logger } from '../logger';
+import { reportServerError } from '../error-reporter';
 
 /**
  * Global exception filter.
@@ -61,6 +62,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
         },
         'Unhandled exception',
       );
+      void reportServerError({
+        requestId,
+        path: request.url,
+        method: request.method,
+        status,
+        name: exception.name,
+        message: exception.message,
+        environment: process.env.NODE_ENV || 'development',
+        timestamp: new Date().toISOString(),
+      });
     }
 
     if (isProduction && status >= 500 && !(exception instanceof HttpException)) {

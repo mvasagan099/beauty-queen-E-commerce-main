@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, HttpStatus, Logger, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, HttpCode, HttpStatus, Logger, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -62,6 +62,49 @@ export class MetricsController {
       payments: this.settleValue(payments),
       redis: this.settleValue(redisInfo),
     };
+  }
+
+  @Get('prometheus')
+  @HttpCode(HttpStatus.OK)
+  @Header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
+  @ApiOperation({ summary: 'Prometheus / OpenMetrics text exposition (admin)' })
+  async prometheusMetrics(): Promise<string> {
+    const snap = await this.metrics();
+    const orders = (snap.orders as any) || {};
+    const payments = (snap.payments as any) || {};
+    const emailQ = (snap.queues.email as any) || {};
+    const notifQ = (snap.queues.notifications as any) || {};
+
+    const lines = [
+      '# HELP bq_uptime_seconds Process uptime in seconds',
+      '# TYPE bq_uptime_seconds gauge',
+      `bq_uptime_seconds ${snap.uptime.toFixed(2)}`,
+      '# HELP bq_memory_rss_bytes Resident set size in bytes',
+      '# TYPE bq_memory_rss_bytes gauge',
+      `bq_memory_rss_bytes ${snap.memory.rss}`,
+      '# HELP bq_memory_heap_used_bytes V8 heap used in bytes',
+      '# TYPE bq_memory_heap_used_bytes gauge',
+      `bq_memory_heap_used_bytes ${snap.memory.heapUsed}`,
+      '# HELP bq_orders_total Total orders count',
+      '# TYPE bq_orders_total gauge',
+      `bq_orders_total ${Number(orders.total || 0)}`,
+      `bq_orders_paid_total ${Number(orders.paid || 0)}`,
+      `bq_orders_cancelled_total ${Number(orders.cancelled || 0)}`,
+      '# HELP bq_payments_total Payment outcomes count',
+      '# TYPE bq_payments_total gauge',
+      `bq_payments_total ${Number(payments.total || 0)}`,
+      `bq_payments_captured_total ${Number(payments.successful || 0)}`,
+      `bq_payments_failed_total ${Number(payments.failed || 0)}`,
+      `bq_payments_refunded_total ${Number(payments.refunded || 0)}`,
+      '# HELP bq_queue_jobs BullMQ queue job counts',
+      '# TYPE bq_queue_jobs gauge',
+      `bq_queue_jobs{queue="email",state="waiting"} ${Number(emailQ.waiting || 0)}`,
+      `bq_queue_jobs{queue="email",state="failed"} ${Number(emailQ.failed || 0)}`,
+      `bq_queue_jobs{queue="notifications",state="waiting"} ${Number(notifQ.waiting || 0)}`,
+      `bq_queue_jobs{queue="notifications",state="failed"} ${Number(notifQ.failed || 0)}`,
+    ];
+
+    return lines.join('\n') + '\n';
   }
 
   @Get('queues')

@@ -180,3 +180,44 @@ jobs:
       - name: Validate Nginx config
         run: |
           docker run --rm -v ${{ github.workspace }}/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro nginx:1.27-alpine nginx -t
+
+  e2e-web:
+    name: Web E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Web dependencies
+        run: cd apps/web && npm ci
+
+      - name: Install Playwright Chromium
+        run: cd apps/web && npx playwright install --with-deps chromium
+
+      - name: Build Web for E2E
+        run: cd apps/web && NEXT_TELEMETRY_DISABLED=1 npx next build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:5000/api
+
+      - name: Run Playwright E2E suite
+        run: |
+          cd apps/web
+          npx next start -p 3000 &
+          SERVER_PID=$!
+          npx wait-on http://localhost:3000 -t 30000 || sleep 5
+          BASE_URL=http://localhost:3000 npx playwright test --project=chromium
+          TEST_EXIT=$?
+          kill $SERVER_PID || true
+          exit $TEST_EXIT
+
+      - name: Upload Playwright report on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
