@@ -3,12 +3,18 @@ import { test, expect } from '@playwright/test';
 test.describe('Accessibility', () => {
   test('skip-to-content link exists and works', async ({ page }) => {
     await page.goto('/');
-    // Skip link should be hidden initially
+    // Skip link should be visually clipped (sr-only 1x1) initially
     const skipLink = page.locator('a[href="#main-content"]');
-    await expect(skipLink).toBeHidden();
-    // After Tab, it should become visible
+    await expect(skipLink).toBeAttached();
+    const initialBox = await skipLink.boundingBox();
+    expect(initialBox).not.toBeNull();
+    expect(initialBox!.width).toBeLessThanOrEqual(1);
+    // After Tab, it should expand and become visibly focused
     await page.keyboard.press('Tab');
+    await expect(skipLink).toBeFocused();
     await expect(skipLink).toBeVisible();
+    const focusedBox = await skipLink.boundingBox();
+    expect(focusedBox!.width).toBeGreaterThan(40);
     // Focus main content after clicking
     await skipLink.click();
     const main = page.locator('#main-content');

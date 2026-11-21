@@ -90,8 +90,13 @@ export function MobileMenu({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
+  const prevPathnameRef = useRef(pathname);
+
   useEffect(() => {
-    onClose();
+    if (prevPathnameRef.current !== pathname) {
+      prevPathnameRef.current = pathname;
+      onClose();
+    }
   }, [pathname, onClose]);
 
   if (!open) return null;
@@ -99,7 +104,7 @@ export function MobileMenu({
   const isActive = (href: string) => pathname === href;
 
   return (
-    <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
+    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
       <div
         className="fixed inset-0 bg-black/50 transition-opacity animate-fade-in"
         onClick={onClose}

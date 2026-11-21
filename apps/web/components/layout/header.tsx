@@ -87,6 +87,10 @@ export default function Header() {
     }
   }, [router]);
 
+  const handleCloseMobileMenu = useCallback(() => {
+    setMobileMenuOpen(false);
+  }, []);
+
   const handleLogout = useCallback(async () => {
     try {
       await authApi.logout();
@@ -305,7 +309,7 @@ export default function Header() {
 
       <MobileMenu
         open={mobileMenuOpen}
-        onClose={() => setMobileMenuOpen(false)}
+        onClose={handleCloseMobileMenu}
         user={user}
         sellerLoggedIn={sellerLoggedIn}
         onLogout={handleLogout}

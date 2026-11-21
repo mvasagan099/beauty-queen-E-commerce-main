@@ -28,8 +28,12 @@ test.describe('Homepage', () => {
   test('skip-to-content link is present and keyboard accessible', async ({ page }) => {
     await page.goto('/');
     const skipLink = page.locator('a[href="#main-content"]');
-    await expect(skipLink).toBeHidden();
+    await expect(skipLink).toBeAttached();
+    const initialBox = await skipLink.boundingBox();
+    expect(initialBox).not.toBeNull();
+    expect(initialBox!.width).toBeLessThanOrEqual(1);
     await page.keyboard.press('Tab');
+    await expect(skipLink).toBeFocused();
     await expect(skipLink).toBeVisible();
   });
 
@@ -95,7 +99,10 @@ test.describe('Navigation', () => {
     await page.goto('/');
     const menuButton = page.locator('button[aria-label="Open navigation menu"]');
     await menuButton.click();
-    await expect(page.locator('button[aria-label="Close navigation"]')).toBeVisible();
+    const closeButton = page.locator('button[aria-label="Close menu"]');
+    await expect(closeButton).toBeVisible();
+    await closeButton.click();
+    await expect(closeButton).toBeHidden();
   });
 });
 
