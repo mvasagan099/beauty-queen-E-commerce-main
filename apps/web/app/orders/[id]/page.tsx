@@ -298,22 +298,44 @@ export default function OrderDetailPage() {
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-base">
                 <FileText className="h-4 w-4" />
-                Invoice
+                GST Tax Invoice
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               {invoiceLoading ? (
                 <p className="text-sm text-muted-foreground">Loading invoice...</p>
-              ) : invoiceData?.invoiceNumber ? (
-                <div className="text-sm">
-                  <p className="font-medium text-foreground">{invoiceData.invoiceNumber}</p>
-                  <p className="text-muted-foreground text-xs mt-0.5">
-                    Generated for order #{order.id}
-                  </p>
-                </div>
+              ) : order.status !== "Cancelled" || order.paymentStatus === "Completed" ? (
+                <>
+                  <div className="text-sm">
+                    <p className="font-medium text-foreground">
+                      {invoiceData?.invoiceNumber || `Order #${order.id} Invoice`}
+                    </p>
+                    <p className="text-muted-foreground text-xs mt-0.5">
+                      Includes HSN code &amp; CGST/SGST/IGST breakdown
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <a
+                      href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}/invoices/order/${order.id}/pdf`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex w-full items-center justify-center rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                    >
+                      Download GST PDF Invoice
+                    </a>
+                    <a
+                      href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}/invoices/order/${order.id}/html`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex w-full items-center justify-center rounded-md border border-input bg-background px-3 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                    >
+                      View Printable Invoice
+                    </a>
+                  </div>
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Invoice becomes available once the order is confirmed.
+                  Invoice is unavailable for cancelled unpaid orders.
                 </p>
               )}
             </CardContent>

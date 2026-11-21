@@ -2,12 +2,15 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import sharp from 'sharp';
 import * as path from 'path';
 import * as fs from 'fs';
+import { MediaStorageService } from './media-storage.service';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const MAX_IMAGES = 5;
 const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 1000;
+const THUMB_WIDTH = 320;
+const THUMB_HEIGHT = 400;
 const WEBP_QUALITY = 80;
 const MAX_DIMENSION = 5000;
 const MIN_DIMENSION = 16;
@@ -16,6 +19,7 @@ const MIN_DIMENSION = 16;
 export class ImageService {
   private readonly logger = new Logger(ImageService.name);
   private readonly uploadDir = path.join(process.cwd(), 'uploads', 'products');
+  private readonly storage = new MediaStorageService();
 
   constructor() {
     if (!fs.existsSync(this.uploadDir)) {
@@ -52,8 +56,9 @@ export class ImageService {
 
     const paths: string[] = [];
     for (let i = 0; i < files.length; i++) {
-      const filename = `${Date.now()}-${i}.webp`;
-      const filepath = path.join(this.uploadDir, filename);
+      const baseName = `${Date.now()}-${i}`;
+      const filename = `${baseName}.webp`;
+      const thumbFilename = `${baseName}-thumb.webp`;
 
       try {
         const metadata = await sharp(files[i].buffer).metadata();
@@ -79,12 +84,24 @@ export class ImageService {
 
         this.logger.debug(`Image ${i}: ${width}x${height} ${actualFormat}`);
 
-        await sharp(files[i].buffer)
-          .resize(DEFAULT_WIDTH, DEFAULT_HEIGHT, { fit: 'cover' })
-          .webp({ quality: WEBP_QUALITY })
-          .toFile(filepath);
+        const [fullBuffer, thumbBuffer] = await Promise.all([
+          sharp(files[i].buffer)
+            .resize(DEFAULT_WIDTH, DEFAULT_HEIGHT, { fit: 'cover' })
+            .webp({ quality: WEBP_QUALITY })
+            .toBuffer(),
+          sharp(files[i].buffer)
+            .resize(THUMB_WIDTH, THUMB_HEIGHT, { fit: 'cover' })
+            .webp({ quality: 75 })
+            .toBuffer(),
+        ]);
 
-        paths.push(`products/${filename}`);
+        const mainKey = `products/${filename}`;
+        const thumbKey = `products/${thumbFilename}`;
+
+        const uploaded = await this.storage.uploadObject(mainKey, fullBuffer, 'image/webp');
+        await this.storage.uploadObject(thumbKey, thumbBuffer, 'image/webp');
+
+        paths.push(uploaded.url);
       } catch (err: any) {
         if (err instanceof BadRequestException) {
           throw err;
@@ -115,6 +132,14 @@ export class ImageService {
       return;
     }
 
+    if (this.storage.isS3Enabled()) {
+      void this.storage.deleteObject(imagePath);
+      if (imagePath.endsWith('.webp')) {
+        void this.storage.deleteObject(imagePath.replace(/\.webp$/, '-thumb.webp'));
+      }
+      return;
+    }
+
     const normalized = imagePath.startsWith('uploads/')
       ? imagePath
       : `uploads/${imagePath.replace(/^\/+/, '')}`;
@@ -124,6 +149,16 @@ export class ImageService {
         fs.unlinkSync(fullPath);
       } catch (err) {
         this.logger.error(`Failed to delete image: ${imagePath}`, err);
+      }
+    }
+    if (fullPath.endsWith('.webp')) {
+      const thumbPath = fullPath.replace(/\.webp$/, '-thumb.webp');
+      if (fs.existsSync(thumbPath)) {
+        try {
+          fs.unlinkSync(thumbPath);
+        } catch {
+          // Thumbnail cleanup is best-effort
+        }
       }
     }
   }

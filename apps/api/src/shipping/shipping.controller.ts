@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Query, Headers, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ShippingService } from './shipping.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -65,5 +65,14 @@ export class ShippingController {
       estimatedDays,
       codAvailable: isValidIndianPincode,
     };
+  }
+
+  @Post('webhook')
+  @ApiOperation({ summary: 'Receive courier tracking webhook updates (Shiprocket)' })
+  async webhook(
+    @Body() body: any,
+    @Headers('x-api-key') apiKey?: string,
+  ) {
+    return this.shippingService.handleCourierWebhook(body || {}, apiKey);
   }
 }
