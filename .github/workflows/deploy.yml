@@ -4,8 +4,12 @@
 name: Deploy
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches: [main]
+  workflow_dispatch:
 
 # Only run if CI workflow succeeds
 concurrency:
@@ -17,22 +21,10 @@ env:
   IMAGE_PREFIX: ${{ github.repository_owner }}/beauty-queen
 
 jobs:
-  ci-check:
-    name: Verify CI Passed
-    runs-on: ubuntu-latest
-    steps:
-      - name: Wait for CI workflow
-        uses: lewagon/wait-on-check-action@v1.3.4
-        with:
-          ref: ${{ github.ref }}
-          check-name: "Build"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 30
-
   build-and-push:
     name: Build & Push Images
     runs-on: ubuntu-latest
-    needs: ci-check
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write

@@ -5,6 +5,7 @@ import { EmailService } from './email/email.service';
 import { EmailProcessor } from './email/email.processor';
 import { InAppNotificationService } from './email/in-app-notification.service';
 import { NotificationProcessor } from './jobs/notification.processor';
+import { WhatsAppService } from './whatsapp.service';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
@@ -18,7 +19,8 @@ import { PrismaModule } from '../prisma/prisma.module';
     EmailProcessor,
     InAppNotificationService,
     NotificationProcessor,
+    WhatsAppService,
   ],
-  exports: [NotificationsService, InAppNotificationService],
+  exports: [NotificationsService, InAppNotificationService, WhatsAppService],
 })
 export class NotificationsModule {}

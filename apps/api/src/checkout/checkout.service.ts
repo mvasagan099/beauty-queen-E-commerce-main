@@ -1,4 +1,10 @@
-import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
 import { CartService } from '../cart/cart.service';
@@ -6,6 +12,7 @@ import { PricingService } from '../pricing/pricing.service';
 import { BuyNowDto } from './dto/checkout.dto';
 import { CheckoutAddressDto } from './dto/checkout.dto';
 import { resolveProductSize } from '../common/product-size.util';
+import { WhatsAppService } from '../notifications/whatsapp.service';
 
 @Injectable()
 export class CheckoutService {
@@ -16,6 +23,7 @@ export class CheckoutService {
     private productsService: ProductsService,
     private cartService: CartService,
     private pricingService: PricingService,
+    @Optional() private whatsappService?: WhatsAppService,
   ) {}
 
   async preview(
@@ -176,6 +184,18 @@ export class CheckoutService {
     this.logger.log(
       `${createdOrders.length} order(s) created from cart for user ${userId}`,
     );
+    if (createdOrders.length > 0 && address.phone) {
+      const totalAmount = createdOrders.reduce(
+        (sum, o) => sum + Number(o.subtotal || 0),
+        0,
+      );
+      this.notifyOrderViaWhatsApp(
+        address.phone,
+        createdOrders[0].id,
+        totalAmount,
+        paymentMethod,
+      );
+    }
     return createdOrders;
   }
 
@@ -267,6 +287,27 @@ export class CheckoutService {
     });
 
     this.logger.log(`Order ${order.id} created via Buy Now for ${address.email}`);
+    if (address.phone) {
+      this.notifyOrderViaWhatsApp(address.phone, order.id, subtotal, paymentMethod);
+    }
     return order;
+  }
+
+  private notifyOrderViaWhatsApp(
+    phone: string,
+    orderId: number,
+    totalAmount: number,
+    paymentMethod: string,
+  ): void {
+    if (!this.whatsappService) return;
+    const normalizedMethod = (paymentMethod || '').toLowerCase();
+    const task =
+      normalizedMethod === 'cod'
+        ? this.whatsappService.sendCodVerificationPrompt(phone, orderId, totalAmount)
+        : this.whatsappService.sendOrderConfirmation(phone, orderId, totalAmount);
+
+    void task.catch((err: any) => {
+      this.logger.warn(`WhatsApp dispatch failed for order ${orderId}: ${err?.message}`);
+    });
   }
 }

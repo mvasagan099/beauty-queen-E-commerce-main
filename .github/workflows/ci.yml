@@ -179,7 +179,17 @@ jobs:
 
       - name: Validate Nginx config
         run: |
-          docker run --rm -v ${{ github.workspace }}/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro nginx:1.27-alpine nginx -t
+          mkdir -p /tmp/ci-nginx-ssl
+          openssl req -x509 -nodes -newkey rsa:2048 \
+            -keyout /tmp/ci-nginx-ssl/privkey.pem \
+            -out /tmp/ci-nginx-ssl/fullchain.pem \
+            -days 1 -subj "/CN=localhost"
+          docker run --rm \
+            --add-host=web:127.0.0.1 \
+            --add-host=api:127.0.0.1 \
+            -v ${{ github.workspace }}/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro \
+            -v /tmp/ci-nginx-ssl:/etc/nginx/ssl:ro \
+            nginx:1.27-alpine nginx -t
 
   e2e-web:
     name: Web E2E (Playwright)
