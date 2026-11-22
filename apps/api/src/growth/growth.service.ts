@@ -470,6 +470,155 @@ export class GrowthService {
     await this.prisma.siteConfig.deleteMany({ where: { key } });
     return { success: true, subscribed: false };
   }
+
+  // ─── "Shop the Look" Outfit Bundles ────────────────────────────
+
+  async getShopTheLookBundles(): Promise<ShopTheLookBundle[]> {
+    const key = 'shop_the_look_bundles';
+    const stored = await this.prisma.siteConfig
+      .findUnique({ where: { key } })
+      .catch(() => null);
+
+    let definitions: ShopTheLookDefinition[] = [];
+    if (Array.isArray(stored?.value) && (stored.value as any[]).length > 0) {
+      definitions = stored.value as unknown as ShopTheLookDefinition[];
+    }
+
+    if (definitions.length > 0) {
+      const allIds = Array.from(new Set(definitions.flatMap((d) => d.productIds || [])));
+      const products = allIds.length
+        ? await this.prisma.product.findMany({
+            where: { id: { in: allIds }, deletedAt: null },
+            select: { id: true, name: true, price: true, mrp: true, image: true, ptype: true },
+          })
+        : [];
+      const byId = new Map(products.map((p) => [p.id, p]));
+
+      return definitions
+        .map((def) => {
+          const items = (def.productIds || [])
+            .map((pid) => byId.get(pid))
+            .filter((p): p is NonNullable<typeof p> => Boolean(p));
+          const originalTotal = items.reduce((s, p) => s + Number(p.price || 0), 0);
+          const discountPercent = Math.min(30, Math.max(0, Number(def.discountPercent || 10)));
+          const bundlePrice = Math.round(originalTotal * (1 - discountPercent / 100));
+          return {
+            id: def.id,
+            title: def.title,
+            occasion: def.occasion,
+            description: def.description,
+            discountPercent,
+            originalTotal,
+            bundlePrice,
+            items: items.map((p) => ({
+              productId: p.id,
+              name: p.name || 'Atelier Piece',
+              price: Number(p.price || 0),
+              image: p.image,
+              category: p.ptype || 'fashion',
+              defaultSize: (p.ptype || '').toLowerCase() === 'saree' || (p.ptype || '').toLowerCase() === 'cosmetics' ? 'FREE_SIZE' : 'M',
+            })),
+          };
+        })
+        .filter((b) => b.items.length > 0);
+    }
+
+    // Auto-compose live curated looks from in-stock catalog if none customized yet
+    type LookProduct = {
+      id: number;
+      name: string | null;
+      price: number | null;
+      image: string | null;
+      ptype: string | null;
+    };
+    const liveProducts: LookProduct[] = await this.prisma.product
+      .findMany({
+        where: { deletedAt: null },
+        orderBy: { id: 'desc' },
+        take: 12,
+        select: { id: true, name: true, price: true, image: true, ptype: true },
+      })
+      .catch(() => [] as LookProduct[]);
+
+    const pickByCat = (cats: string[]) =>
+      liveProducts.find((p) => cats.includes((p.ptype || '').toLowerCase()));
+
+    const festiveItems = [
+      pickByCat(['saree']),
+      pickByCat(['cosmetics']),
+    ].filter((p): p is NonNullable<typeof p> => Boolean(p));
+
+    const everydayItems = [
+      pickByCat(['kurthi', 'top']),
+      pickByCat(['leggin']),
+    ].filter((p): p is NonNullable<typeof p> => Boolean(p));
+
+    const composed: ShopTheLookBundle[] = [];
+    if (festiveItems.length >= 2) {
+      const originalTotal = festiveItems.reduce((s, p) => s + Number(p.price || 0), 0);
+      composed.push({
+        id: 'festive-kanjeevaram-edit',
+        title: 'The Festive Silk & Kumkum Edit',
+        occasion: 'Wedding & Celebration',
+        description: 'Pair heirloom weave richness with a velvet matte lip finish.',
+        discountPercent: 10,
+        originalTotal,
+        bundlePrice: Math.round(originalTotal * 0.9),
+        items: festiveItems.map((p) => ({
+          productId: p.id,
+          name: p.name || 'Atelier Piece',
+          price: Number(p.price || 0),
+          image: p.image,
+          category: p.ptype || 'saree',
+          defaultSize: 'FREE_SIZE',
+        })),
+      });
+    }
+    if (everydayItems.length >= 2) {
+      const originalTotal = everydayItems.reduce((s, p) => s + Number(p.price || 0), 0);
+      composed.push({
+        id: 'everyday-atelier-set',
+        title: 'The Everyday Silhouette Pairing',
+        occasion: 'Workday & Brunch',
+        description: 'Breathable embroidered drape paired with 4-way stretch modal comfort.',
+        discountPercent: 10,
+        originalTotal,
+        bundlePrice: Math.round(originalTotal * 0.9),
+        items: everydayItems.map((p) => ({
+          productId: p.id,
+          name: p.name || 'Atelier Piece',
+          price: Number(p.price || 0),
+          image: p.image,
+          category: p.ptype || 'kurthi',
+          defaultSize: 'M',
+        })),
+      });
+    }
+    return composed;
+  }
+
+  async saveShopTheLookBundles(definitions: ShopTheLookDefinition[]) {
+    if (!Array.isArray(definitions)) {
+      throw new BadRequestException('Bundles array is required');
+    }
+    const cleaned = definitions.slice(0, 8).map((d, idx) => ({
+      id: (d.id || `look-${idx + 1}`).trim().toLowerCase().replace(/[^a-z0-9-_]/g, ''),
+      title: (d.title || `Curated Look ${idx + 1}`).trim().slice(0, 100),
+      occasion: (d.occasion || 'Festive Edit').trim().slice(0, 60),
+      description: (d.description || '').trim().slice(0, 220),
+      discountPercent: Math.min(30, Math.max(0, Number(d.discountPercent ?? 10))),
+      productIds: Array.isArray(d.productIds)
+        ? d.productIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0).slice(0, 5)
+        : [],
+    }));
+
+    await this.prisma.siteConfig.upsert({
+      where: { key: 'shop_the_look_bundles' },
+      update: { value: cleaned as any },
+      create: { key: 'shop_the_look_bundles', value: cleaned as any },
+    });
+    return this.getShopTheLookBundles();
+  }
 }
 
 export interface ProductSwatch {
@@ -478,4 +627,31 @@ export interface ProductSwatch {
   hex: string;
   image?: string | null;
   inStock?: boolean;
+}
+
+export interface ShopTheLookDefinition {
+  id: string;
+  title: string;
+  occasion: string;
+  description: string;
+  discountPercent: number;
+  productIds: number[];
+}
+
+export interface ShopTheLookBundle {
+  id: string;
+  title: string;
+  occasion: string;
+  description: string;
+  discountPercent: number;
+  originalTotal: number;
+  bundlePrice: number;
+  items: {
+    productId: number;
+    name: string;
+    price: number;
+    image: string | null;
+    category: string;
+    defaultSize: string;
+  }[];
 }

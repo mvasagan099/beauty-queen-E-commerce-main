@@ -10,6 +10,7 @@ import { AtelierHero } from "@/components/home/AtelierHero";
 import { AtelierRunway } from "@/components/home/AtelierRunway";
 import { FlashSaleBanner } from "@/components/home/FlashSaleBanner";
 import { AtelierStylistStudio } from "@/components/home/AtelierStylistStudio";
+import { ShopTheLook } from "@/components/home/ShopTheLook";
 
 function Section({
   title,
@@ -70,6 +71,7 @@ export default function HomePage() {
       <AtelierHero />
       <AtelierRunway />
       <AtelierStylistStudio />
+      <ShopTheLook />
 
       {/* Live Catalog Sections */}
       <div className="container-page">

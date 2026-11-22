@@ -20,6 +20,7 @@ import {
   ScrollText,
   LifeBuoy,
   Megaphone,
+  Wallet,
 } from "lucide-react";
 
 export interface SidebarItem {
@@ -128,6 +129,11 @@ export const sellerSidebarItems: SidebarItem[] = [
     icon: <Boxes className="h-4 w-4" />,
   },
   {
+    label: "Payouts",
+    href: "/seller/payouts",
+    icon: <Wallet className="h-4 w-4" />,
+  },
+  {
     label: "Profile",
     href: "/seller/profile",
     icon: <User className="h-4 w-4" />,
@@ -144,6 +150,11 @@ export const adminSidebarItems: SidebarItem[] = [
     label: "Analytics",
     href: "/admin/analytics",
     icon: <BarChart3 className="h-4 w-4" />,
+  },
+  {
+    label: "Payouts & GST",
+    href: "/admin/payouts",
+    icon: <Wallet className="h-4 w-4" />,
   },
   {
     label: "Products",

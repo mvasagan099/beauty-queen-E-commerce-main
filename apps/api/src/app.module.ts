@@ -30,6 +30,7 @@ import { ReturnsModule } from './returns/returns.module';
 import { RefundsModule } from './refunds/refunds.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { GrowthModule } from './growth/growth.module';
+import { FinanceModule } from './finance/finance.module';
 import { HealthController } from './common/health.controller';
 import { MetricsController } from './common/metrics.controller';
 import { RedisModule } from './common/redis.module';
@@ -75,6 +76,7 @@ import { CsrfModule } from './common/csrf/csrf.module';
     RefundsModule,
     InvoicesModule,
     GrowthModule,
+    FinanceModule,
   ],
   controllers: [HealthController, MetricsController],
 })

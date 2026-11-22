@@ -134,4 +134,20 @@ export class GrowthController {
   async stylist(@Body('prompt') prompt: string) {
     return this.growthService.getStylistRecommendations(prompt);
   }
+
+  @Get('looks')
+  @ApiOperation({ summary: 'Get curated "Shop the Look" outfit bundles' })
+  async getLooks() {
+    const looks = await this.growthService.getShopTheLookBundles();
+    return { success: true, looks };
+  }
+
+  @Put('looks')
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Save custom "Shop the Look" outfit bundles (admin)' })
+  async saveLooks(@Body('looks') looks: any[]) {
+    const saved = await this.growthService.saveShopTheLookBundles(looks);
+    return { success: true, looks: saved };
+  }
 }
