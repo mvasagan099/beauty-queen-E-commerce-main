@@ -179,6 +179,8 @@ export const authApi = {
     api.post("/auth/send-otp", { email }),
   verifyOtp: (email: string, otp: string) =>
     api.post("/auth/verify-otp", { email, otp }),
+  googleSignIn: (credential: string) =>
+    api.post("/auth/google", { credential }),
   refresh: (refreshToken: string) =>
     api.post("/auth/refresh", { refreshToken }),
   logout: () => api.post("/auth/logout"),

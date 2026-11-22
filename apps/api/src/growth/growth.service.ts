@@ -437,6 +437,39 @@ export class GrowthService {
     });
     return sanitized;
   }
+
+  // ─── Web Push Subscriptions ────────────────────────────────────
+
+  async savePushSubscription(
+    userId: number,
+    subscription: { endpoint?: string; keys?: { p256dh?: string; auth?: string } },
+  ) {
+    const endpoint = (subscription?.endpoint || '').trim();
+    if (!endpoint || !endpoint.startsWith('https://')) {
+      throw new BadRequestException('Valid HTTPS push subscription endpoint is required');
+    }
+    const key = `push:sub:user:${userId}`;
+    const record = {
+      endpoint: endpoint.slice(0, 500),
+      keys: {
+        p256dh: String(subscription?.keys?.p256dh || '').slice(0, 255),
+        auth: String(subscription?.keys?.auth || '').slice(0, 128),
+      },
+      subscribedAt: new Date().toISOString(),
+    };
+    await this.prisma.siteConfig.upsert({
+      where: { key },
+      update: { value: record as any },
+      create: { key, value: record as any },
+    });
+    return { success: true, subscribed: true };
+  }
+
+  async removePushSubscription(userId: number) {
+    const key = `push:sub:user:${userId}`;
+    await this.prisma.siteConfig.deleteMany({ where: { key } });
+    return { success: true, subscribed: false };
+  }
 }
 
 export interface ProductSwatch {

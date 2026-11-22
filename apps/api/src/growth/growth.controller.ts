@@ -3,6 +3,7 @@ import {
   Get,
   Put,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -12,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { GrowthService, FlashSaleBanner, ProductSwatch } from './growth.service';
+import { AbandonedCartService } from './abandoned-cart.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { CsrfGuard } from '../common/csrf/csrf.guard';
@@ -20,7 +22,10 @@ import { Role } from '@prisma/client';
 @ApiTags('Growth')
 @Controller('growth')
 export class GrowthController {
-  constructor(private readonly growthService: GrowthService) {}
+  constructor(
+    private readonly growthService: GrowthService,
+    private readonly abandonedCartService: AbandonedCartService,
+  ) {}
 
   @Get('banner')
   @ApiOperation({ summary: 'Get active storefront announcement / flash sale banner' })
@@ -84,6 +89,44 @@ export class GrowthController {
   ) {
     const saved = await this.growthService.saveProductSwatches(productId, swatches);
     return { success: true, swatches: saved };
+  }
+
+  @Post('push/subscribe')
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
+  @Roles(Role.CUSTOMER)
+  @ApiOperation({ summary: 'Register browser Web Push subscription for restock & price alerts' })
+  async subscribePush(
+    @Request() req: any,
+    @Body() body: { endpoint?: string; keys?: { p256dh?: string; auth?: string } },
+  ) {
+    return this.growthService.savePushSubscription(req.user.sub, body);
+  }
+
+  @Delete('push/subscribe')
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
+  @Roles(Role.CUSTOMER)
+  @ApiOperation({ summary: 'Remove browser Web Push subscription' })
+  async unsubscribePush(@Request() req: any) {
+    return this.growthService.removePushSubscription(req.user.sub);
+  }
+
+  @Get('abandoned-carts/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Get count & value of idle carts eligible for recovery (admin)' })
+  async abandonedCartStats(@Query('minIdleMinutes') minIdleMinutes?: string) {
+    const mins = minIdleMinutes ? parseInt(minIdleMinutes, 10) || 120 : 120;
+    const stats = await this.abandonedCartService.getStats(mins);
+    return { success: true, ...stats };
+  }
+
+  @Post('abandoned-carts/run')
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Trigger abandoned cart recovery sweep via Email + WhatsApp (admin)' })
+  async runAbandonedCartSweep(@Body('minIdleMinutes') minIdleMinutes?: number) {
+    const result = await this.abandonedCartService.runRecoverySweep(minIdleMinutes || 120);
+    return { success: true, ...result };
   }
 
   @Post('stylist')

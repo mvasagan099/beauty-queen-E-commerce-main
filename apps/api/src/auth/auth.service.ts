@@ -69,6 +69,53 @@ export class AuthService {
     return user;
   }
 
+  async verifyGoogleCredential(credential: string) {
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    if (!clientId) {
+      throw new UnauthorizedException('Google sign-in is not configured on this server');
+    }
+    const token = (credential || '').trim();
+    if (!token) {
+      throw new UnauthorizedException('Missing Google credential');
+    }
+
+    let payload: {
+      aud?: string;
+      email?: string;
+      email_verified?: string | boolean;
+      name?: string;
+    };
+    try {
+      const res = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`,
+      );
+      if (!res.ok) {
+        throw new UnauthorizedException('Invalid Google token');
+      }
+      payload = (await res.json()) as any;
+    } catch (err) {
+      if (err instanceof UnauthorizedException) throw err;
+      throw new UnauthorizedException('Failed to verify Google credential');
+    }
+
+    const emailVerified =
+      payload.email_verified === true || payload.email_verified === 'true';
+    if (payload.aud !== clientId || !payload.email || !emailVerified) {
+      throw new UnauthorizedException('Unverified or mismatched Google token');
+    }
+
+    const normalizedEmail = payload.email.trim().toLowerCase();
+    let user = await this.findOrCreateUser(normalizedEmail);
+    if (!user.name && payload.name) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { name: payload.name.trim().slice(0, 120) },
+        select: { id: true, email: true, role: true, name: true },
+      });
+    }
+    return user;
+  }
+
   async generateTokens(userId: number, email: string, role: Role) {
     const payload = { sub: userId, email, role };
 

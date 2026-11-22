@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { formatPrice } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Megaphone } from "lucide-react";
+import { Megaphone, ShoppingBag } from "lucide-react";
 
 interface FlashSaleBanner {
   active: boolean;
@@ -35,6 +36,17 @@ export default function AdminMerchandisingPage() {
     queryFn: () => api.get("/growth/banner"),
   });
 
+  const { data: abandonedStats, refetch: refetchAbandoned } = useQuery<{
+    success: boolean;
+    eligibleCarts: number;
+    totalAbandonedValue: number;
+    minIdleMinutes: number;
+  }>({
+    queryKey: ["admin-abandoned-carts"],
+    queryFn: () => api.get("/growth/abandoned-carts/stats"),
+    retry: false,
+  });
+
   useEffect(() => {
     if (data?.banner) {
       setForm({
@@ -56,6 +68,23 @@ export default function AdminMerchandisingPage() {
       toast.success("Storefront flash sale banner saved");
     },
     onError: (err: Error) => toast.error(err.message || "Could not save banner"),
+  });
+
+  const sweepMutation = useMutation({
+    mutationFn: () =>
+      api.post<{
+        success: boolean;
+        scannedCarts: number;
+        remindedCount: number;
+        whatsappDispatched: number;
+      }>("/growth/abandoned-carts/run", { minIdleMinutes: 120 }),
+    onSuccess: (res) => {
+      toast.success(
+        `Sent ${res.remindedCount} recovery reminder(s) (${res.whatsappDispatched} via WhatsApp)`
+      );
+      refetchAbandoned();
+    },
+    onError: (err: Error) => toast.error(err.message || "Recovery sweep failed"),
   });
 
   return (
@@ -182,6 +211,37 @@ export default function AdminMerchandisingPage() {
               </div>
             </form>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShoppingBag className="h-4 w-4 text-primary" />
+            Abandoned Cart Recovery (2h+ Idle)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm text-foreground">
+              <span className="font-semibold">{abandonedStats?.eligibleCarts ?? 0}</span> idle
+              bag(s) totaling{" "}
+              <span className="font-semibold text-primary">
+                {formatPrice(abandonedStats?.totalAbandonedValue ?? 0)}
+              </span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Sends Brevo email, in-app alert, and WhatsApp reminder (automatically deduped per 24h).
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={sweepMutation.isPending}
+            onClick={() => sweepMutation.mutate()}
+          >
+            {sweepMutation.isPending ? "Sending..." : "Send Recovery Reminders"}
+          </Button>
         </CardContent>
       </Card>
     </div>

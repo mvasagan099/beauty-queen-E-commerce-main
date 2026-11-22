@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import * as http from 'http';
 import { AppModule } from './app.module';
 import { RedisService } from './common/redis.service';
+import { AbandonedCartService } from './growth/abandoned-cart.service';
 
 /**
  * Background worker entrypoint.
@@ -25,10 +26,22 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const redis = app.get(RedisService);
+  const abandonedCartService = app.get(AbandonedCartService);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
   const healthPort = configService.get<number>('WORKER_HEALTH_PORT', 5001);
 
   logger.log(`BullMQ Worker started [${nodeEnv}]`);
+
+  let recoveryTimer: NodeJS.Timeout | undefined;
+  if (configService.get<string>('ABANDONED_CART_RECOVERY_ENABLED') === 'true') {
+    const intervalMs = 60 * 60 * 1000; // Hourly sweep
+    recoveryTimer = setInterval(() => {
+      void abandonedCartService.runRecoverySweep(120).catch((err: any) => {
+        logger.warn(`Abandoned cart sweep failed: ${err?.message}`);
+      });
+    }, intervalMs);
+    logger.log('Abandoned cart recovery worker scheduled (hourly, 2h idle threshold)');
+  }
 
   const server = http.createServer(async (req, res) => {
     const url = req.url || '';
@@ -66,6 +79,7 @@ async function bootstrap() {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.log(`${signal} received, shutting down worker...`);
+    if (recoveryTimer) clearInterval(recoveryTimer);
     server.close();
     await app.close();
     process.exit(0);

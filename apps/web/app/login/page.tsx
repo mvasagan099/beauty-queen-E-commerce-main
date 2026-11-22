@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { authApi } from "@/lib/api";
+import { authApi, cartApi } from "@/lib/api";
+import { useAuthStore, useGuestCartStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mail, ArrowRight, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -23,6 +26,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const googleBtnRef = useRef<HTMLDivElement>(null);
+  const setUser = useAuthStore((s) => s.setUser);
+  const guestItems = useGuestCartStore((s) => s.items);
+  const clearGuestCart = useGuestCartStore((s) => s.clear);
 
   const {
     register,
@@ -31,6 +38,59 @@ export default function LoginPage() {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || typeof window === "undefined") return;
+
+    const initGoogle = () => {
+      const gsi = (window as any).google?.accounts?.id;
+      if (!gsi || !googleBtnRef.current) return;
+      gsi.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: async (response: { credential?: string }) => {
+          if (!response?.credential) return;
+          setLoading(true);
+          setError("");
+          try {
+            const res = await authApi.googleSignIn(response.credential);
+            if (res?.user) {
+              setUser(res.user);
+            }
+            if (guestItems.length > 0) {
+              for (const item of guestItems) {
+                await cartApi.add(item.productId, item.size, item.quantity).catch(() => undefined);
+              }
+              clearGuestCart();
+            }
+            toast.success("Signed in with Google");
+            router.push("/");
+          } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Google sign-in failed");
+          } finally {
+            setLoading(false);
+          }
+        },
+      });
+      gsi.renderButton(googleBtnRef.current, {
+        theme: "outline",
+        size: "large",
+        width: 340,
+        text: "continue_with",
+      });
+    };
+
+    if ((window as any).google?.accounts?.id) {
+      initGoogle();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = initGoogle;
+    document.head.appendChild(script);
+  }, [router, setUser, guestItems, clearGuestCart]);
 
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true);
@@ -100,6 +160,20 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
+
+          {GOOGLE_CLIENT_ID && (
+            <div className="mt-5">
+              <div className="relative flex items-center justify-center my-4">
+                <div className="border-t border-border w-full" />
+                <span className="bg-card px-3 text-xs text-muted-foreground uppercase tracking-wider">
+                  or
+                </span>
+                <div className="border-t border-border w-full" />
+              </div>
+              <div ref={googleBtnRef} className="flex justify-center" />
+            </div>
+          )}
+
           <div className="mt-6 text-center">
             <p className="text-xs text-muted-foreground">
               By continuing, you agree to our Terms of Service and Privacy Policy.

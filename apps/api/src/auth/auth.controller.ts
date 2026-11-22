@@ -71,6 +71,30 @@ export class AuthController {
     };
   }
 
+  @Post('google')
+  @UseGuards(RateLimitGuard)
+  @RateLimit('auth_google', 20, 15 * 60)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Sign in with Google ID token (1-tap OAuth)' })
+  async googleSignIn(
+    @Body('credential') credential: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const user = await this.authService.verifyGoogleCredential(credential);
+    const tokens = await this.authService.generateTokens(
+      user.id,
+      user.email,
+      user.role,
+    );
+    this.setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
+
+    return {
+      success: true,
+      message: 'Google sign-in successful',
+      user: { id: user.id, email: user.email, role: user.role, name: user.name },
+    };
+  }
+
   @Post('refresh')
   @UseGuards(RateLimitGuard)
   @RateLimit('auth_refresh', 30, 15 * 60)
