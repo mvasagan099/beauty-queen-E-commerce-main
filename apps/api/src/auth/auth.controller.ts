@@ -48,6 +48,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Login successful' })
   async verifyOtp(
     @Body() dto: VerifyOtpDto,
+    @Req() req: any,
     @Res({ passthrough: true }) res: Response,
   ) {
     const verified = await this.authService.verifyOtp(dto.email, dto.otp);
@@ -63,11 +64,13 @@ export class AuthController {
     );
 
     this.setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
+    const isMobile = String(req?.headers?.['x-client-platform'] || '').toLowerCase() === 'mobile';
 
     return {
       success: true,
       message: 'Login successful',
       user: { id: user.id, email: user.email, role: user.role, name: user.name },
+      ...(isMobile ? { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken } : {}),
     };
   }
 
@@ -78,6 +81,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Sign in with Google ID token (1-tap OAuth)' })
   async googleSignIn(
     @Body('credential') credential: string,
+    @Req() req: any,
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = await this.authService.verifyGoogleCredential(credential);
@@ -87,11 +91,13 @@ export class AuthController {
       user.role,
     );
     this.setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
+    const isMobile = String(req?.headers?.['x-client-platform'] || '').toLowerCase() === 'mobile';
 
     return {
       success: true,
       message: 'Google sign-in successful',
       user: { id: user.id, email: user.email, role: user.role, name: user.name },
+      ...(isMobile ? { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken } : {}),
     };
   }
 
@@ -102,12 +108,18 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   async refresh(
     @Body() dto: RefreshTokenDto,
+    @Req() req: any,
     @Res({ passthrough: true }) res: Response,
   ) {
     const tokens = await this.authService.refreshTokens(dto.refreshToken);
     this.setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
+    const isMobile = String(req?.headers?.['x-client-platform'] || '').toLowerCase() === 'mobile';
 
-    return { success: true, message: 'Token refreshed' };
+    return {
+      success: true,
+      message: 'Token refreshed',
+      ...(isMobile ? { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken } : {}),
+    };
   }
 
   @Post('logout')
