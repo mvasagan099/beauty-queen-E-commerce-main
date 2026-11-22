@@ -15,13 +15,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { AtelierTheme, formatPrice } from "../src/theme/atelier";
 import { paymentsApi } from "../src/lib/api";
 
-function escapeHtmlAttr(val: string): string {
-  return val
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+function serializeForScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }
 
 export default function PaymentScreen() {
@@ -49,11 +48,20 @@ export default function PaymentScreen() {
   const [webViewKey, setWebViewKey] = useState(0);
 
   const checkoutHtml = useMemo(() => {
-    const safeKey = escapeHtmlAttr(keyId);
-    const safeOrder = escapeHtmlAttr(orderId);
-    const safeName = escapeHtmlAttr(params.name || "Beauty Queen Customer");
-    const safeEmail = escapeHtmlAttr(params.email || "");
-    const safePhone = escapeHtmlAttr(params.phone || "");
+    const serializedConfig = serializeForScript({
+      key: keyId,
+      amount: amountPaise,
+      currency: "INR",
+      name: "Beauty Queen Atelier",
+      description: "Order Checkout",
+      order_id: orderId,
+      prefill: {
+        name: params.name || "Beauty Queen Customer",
+        email: params.email || "",
+        contact: params.phone || "",
+      },
+      theme: { color: "#A81C44" },
+    });
 
     return `<!DOCTYPE html>
 <html>
@@ -109,24 +117,13 @@ export default function PaymentScreen() {
         window.ReactNativeWebView.postMessage(JSON.stringify(payload));
       }
     }
+    var BASE_OPTIONS = ${serializedConfig};
     function openRazorpay() {
       if (typeof Razorpay === "undefined") {
         post({ type: "error", message: "Razorpay SDK failed to load. Check your network connection." });
         return;
       }
-      var options = {
-        key: "${safeKey}",
-        amount: ${amountPaise},
-        currency: "INR",
-        name: "Beauty Queen Atelier",
-        description: "Order Checkout",
-        order_id: "${safeOrder}",
-        prefill: {
-          name: "${safeName}",
-          email: "${safeEmail}",
-          contact: "${safePhone}"
-        },
-        theme: { color: "#A81C44" },
+      var options = Object.assign({}, BASE_OPTIONS, {
         handler: function (response) {
           post({
             type: "success",
@@ -140,7 +137,7 @@ export default function PaymentScreen() {
             post({ type: "dismissed" });
           }
         }
-      };
+      });
       var rzp = new Razorpay(options);
       rzp.on("payment.failed", function (resp) {
         post({

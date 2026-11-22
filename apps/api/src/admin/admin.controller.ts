@@ -1,8 +1,19 @@
-import { Controller, Get, Put, Body, Param, Query, UseGuards, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Put,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  ParseIntPipe,
+  BadRequestException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { CsrfGuard } from '../common/csrf/csrf.guard';
 import { Role } from '@prisma/client';
 
 @ApiTags('Admin')
@@ -34,20 +45,28 @@ export class AdminController {
   }
 
   @Put('sellers/:id/status')
+  @UseGuards(CsrfGuard)
   @ApiOperation({ summary: 'Update seller active status' })
   async updateSellerStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body('isActive') isActive: boolean,
   ) {
+    if (typeof isActive !== 'boolean') {
+      throw new BadRequestException('isActive must be a boolean');
+    }
     return this.adminService.updateSellerStatus(id, isActive);
   }
 
   @Put('sellers/:id/role')
+  @UseGuards(CsrfGuard)
   @ApiOperation({ summary: 'Update user role' })
   async updateSellerRole(
     @Param('id', ParseIntPipe) id: number,
     @Body('role') role: Role,
   ) {
+    if (!Object.values(Role).includes(role)) {
+      throw new BadRequestException('Invalid role value');
+    }
     return this.adminService.updateSellerRole(id, role);
   }
 

@@ -212,8 +212,11 @@ export class AdminExportsService {
     return values
       .map((v) => {
         if (v === null || v === undefined) return '';
-        const s = String(v);
-        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        let s = String(v);
+        if (/^[=+\-@\t\r]/.test(s)) {
+          s = `'${s}`;
+        }
+        return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
       })
       .join(',');
   }

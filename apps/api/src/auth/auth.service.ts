@@ -20,50 +20,73 @@ export class AuthService {
     private notificationsService: NotificationsService,
   ) {}
 
+  private hashRefreshToken(token: string): string {
+    return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
+  }
+
+  private async verifyRefreshTokenHash(token: string, storedHash: string): Promise<boolean> {
+    if (storedHash.startsWith('sha256:')) {
+      const expected = Buffer.from(this.hashRefreshToken(token), 'utf8');
+      const actual = Buffer.from(storedHash, 'utf8');
+      return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+    }
+    // Backward compatibility for legacy bcrypt-hashed refresh tokens during rollout
+    return bcrypt.compare(token, storedHash);
+  }
+
   async generateOtp(email: string): Promise<string> {
+    const normalizedEmail = email.trim().toLowerCase();
     const otp = crypto.randomInt(100000, 999999).toString();
     const ttl = 300; // 5 minutes
-    await this.redis.set(`otp:${email}`, otp, ttl);
-    await this.redis.set(`otp:attempts:${email}`, '0', ttl);
+    await this.redis.set(`otp:${normalizedEmail}`, otp, ttl);
+    await this.redis.set(`otp:attempts:${normalizedEmail}`, '0', ttl);
 
-    await this.notificationsService.notifyOtpRequested(email, otp);
+    await this.notificationsService.notifyOtpRequested(normalizedEmail, otp);
 
     return otp;
   }
 
   async verifyOtp(email: string, otp: string): Promise<boolean> {
-    const storedOtp = await this.redis.get(`otp:${email}`);
+    const normalizedEmail = email.trim().toLowerCase();
+    const storedOtp = await this.redis.get(`otp:${normalizedEmail}`);
     if (!storedOtp) {
       throw new UnauthorizedException('OTP expired or not found');
     }
 
-    const attempts = parseInt(await this.redis.get(`otp:attempts:${email}`) || '0');
+    const attempts = parseInt(await this.redis.get(`otp:attempts:${normalizedEmail}`) || '0', 10);
     if (attempts >= 5) {
       throw new UnauthorizedException('Too many attempts. Please request a new OTP.');
     }
 
-    if (storedOtp !== otp) {
-      await this.redis.incr(`otp:attempts:${email}`);
+    const expectedBuf = Buffer.from(storedOtp, 'utf8');
+    const providedBuf = Buffer.from(String(otp || '').trim(), 'utf8');
+    const isMatch =
+      expectedBuf.length === providedBuf.length &&
+      crypto.timingSafeEqual(expectedBuf, providedBuf);
+
+    if (!isMatch) {
+      await this.redis.incr(`otp:attempts:${normalizedEmail}`);
       throw new UnauthorizedException('Invalid OTP');
     }
 
-    await this.redis.del(`otp:${email}`);
-    await this.redis.del(`otp:attempts:${email}`);
+    await this.redis.del(`otp:${normalizedEmail}`);
+    await this.redis.del(`otp:attempts:${normalizedEmail}`);
     return true;
   }
 
   async findOrCreateUser(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
     let user = await this.prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
       select: { id: true, email: true, role: true, name: true },
     });
 
     if (!user) {
       user = await this.prisma.user.create({
-        data: { email, role: Role.CUSTOMER },
+        data: { email: normalizedEmail, role: Role.CUSTOMER },
         select: { id: true, email: true, role: true, name: true },
       });
-      this.logger.log(`New user created: ${email}`);
+      this.logger.log(`New user created: ${normalizedEmail}`);
     }
 
     return user;
@@ -130,14 +153,17 @@ export class AuthService {
         secret: accessSecret,
         expiresIn: '15m',
       }),
-      this.jwtService.signAsync(payload, {
-        secret: refreshSecret,
-        expiresIn: '7d',
-      }),
+      this.jwtService.signAsync(
+        { ...payload, jti: crypto.randomUUID() },
+        {
+          secret: refreshSecret,
+          expiresIn: '7d',
+        },
+      ),
     ]);
 
-    // Store refresh token hash
-    const tokenHash = await bcrypt.hash(refreshToken, 10);
+    // Hash the entire JWT with SHA-256 (avoids bcrypt's 72-byte truncation on JWTs)
+    const tokenHash = this.hashRefreshToken(refreshToken);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await this.prisma.refreshToken.create({
@@ -171,7 +197,7 @@ export class AuthService {
 
       let validToken = null;
       for (const stored of storedTokens) {
-        const isValid = await bcrypt.compare(refreshToken, stored.token);
+        const isValid = await this.verifyRefreshTokenHash(refreshToken, stored.token);
         if (isValid) {
           validToken = stored;
           break;

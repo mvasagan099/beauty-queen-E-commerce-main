@@ -39,11 +39,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (payload.role === 'SELLER') {
       const seller = await this.prisma.seller.findUnique({
         where: { id: payload.sub },
-        select: { id: true, email: true, sellername: true },
+        select: { id: true, email: true, sellername: true, isActive: true },
       });
 
       if (!seller) {
         throw new UnauthorizedException('Seller not found');
+      }
+      if (!seller.isActive) {
+        throw new UnauthorizedException('Seller account is deactivated');
       }
 
       return { sub: seller.id, email: seller.email, role: 'SELLER' as const, name: seller.sellername };

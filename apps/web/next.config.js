@@ -5,6 +5,7 @@ const API_PROXY_TARGET =
   process.env.API_PROXY_TARGET || "http://localhost:5000";
 
 const nextConfig = {
+  poweredByHeader: false,
   ...(process.env.OUTPUT_STANDALONE === "true"
     ? { output: "standalone" }
     : {}),

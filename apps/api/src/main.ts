@@ -41,7 +41,6 @@ async function bootstrap() {
           scriptSrc: [
             "'self'",
             "'unsafe-inline'",
-            "'unsafe-eval'",
             'https://checkout.razorpay.com',
             'https://api.razorpay.com',
           ],
@@ -93,7 +92,14 @@ async function bootstrap() {
     origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token', 'x-request-id', 'x-razorpay-signature'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-csrf-token',
+      'x-request-id',
+      'x-razorpay-signature',
+      'x-client-platform',
+    ],
     maxAge: nodeEnv === 'production' ? 86400 : undefined,
   });
 

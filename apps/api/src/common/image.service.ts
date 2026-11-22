@@ -140,10 +140,15 @@ export class ImageService {
       return;
     }
 
+    const uploadsRoot = path.resolve(process.cwd(), 'uploads');
     const normalized = imagePath.startsWith('uploads/')
       ? imagePath
       : `uploads/${imagePath.replace(/^\/+/, '')}`;
-    const fullPath = path.join(process.cwd(), normalized);
+    const fullPath = path.resolve(process.cwd(), normalized);
+    if (!fullPath.startsWith(`${uploadsRoot}${path.sep}`)) {
+      this.logger.warn(`Refusing to delete path outside uploads root: ${imagePath}`);
+      return;
+    }
     if (fs.existsSync(fullPath)) {
       try {
         fs.unlinkSync(fullPath);

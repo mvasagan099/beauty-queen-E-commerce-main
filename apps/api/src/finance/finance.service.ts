@@ -302,6 +302,18 @@ export class FinanceService {
     };
   }
 
+  private sanitizeCsvCell(value: unknown): string {
+    let text = String(value ?? '');
+    // Prevent spreadsheet formula injection (Excel / Google Sheets / LibreOffice Calc)
+    if (/^[=+\-@\t\r]/.test(text)) {
+      text = `'${text}`;
+    }
+    if (/[",\r\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  }
+
   formatGstr1Csv(report: Awaited<ReturnType<FinanceService['generateGstr1Report']>>): string {
     const header =
       'Month,HSN,Category,GST Rate (%),Total Quantity,Taxable Value (INR),CGST (INR),SGST (INR),IGST (INR),Total Invoice Value (INR)';
@@ -317,7 +329,9 @@ export class FinanceService {
         r.sgst.toFixed(2),
         r.igst.toFixed(2),
         r.totalValue.toFixed(2),
-      ].join(','),
+      ]
+        .map((cell) => this.sanitizeCsvCell(cell))
+        .join(','),
     );
     return [header, ...rows].join('\n');
   }
