@@ -4,10 +4,11 @@ import { CartService } from './cart.service';
 import { AddToCartDto, UpdateCartDto } from './dto/cart.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { CsrfGuard } from '../common/csrf/csrf.guard';
 import { Role } from '@prisma/client';
 
 @ApiTags('Cart')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
 @Roles(Role.CUSTOMER)
 @Controller('cart')
 export class CartController {

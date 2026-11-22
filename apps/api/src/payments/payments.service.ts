@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ForbiddenException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/redis.service';
@@ -13,6 +14,8 @@ import { CartService } from '../cart/cart.service';
 import { PricingService } from '../pricing/pricing.service';
 import { CouponsService } from '../coupons/coupons.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { WhatsAppService } from '../notifications/whatsapp.service';
+import { StockReservationService } from '../inventory/stock-reservation.service';
 import { resolveProductSize } from '../common/product-size.util';
 import {
   CreateCheckoutDto,
@@ -46,6 +49,8 @@ export class PaymentsService {
     private notifications: NotificationsService,
     private webhookService: WebhookService,
     private redisService: RedisService,
+    @Optional() private stockReservationService?: StockReservationService,
+    @Optional() private whatsappService?: WhatsAppService,
   ) {}
 
   async createCheckout(userId: number, dto: CreateCheckoutDto) {
@@ -188,11 +193,16 @@ export class PaymentsService {
             paymentMethod: dto.paymentMethod,
             source: dto.source,
             couponCode: dto.couponCode || null,
+            phone: dto.phone || null,
             attempts: 0,
           } as any,
         },
       });
     });
+
+    if (this.stockReservationService) {
+      await this.stockReservationService.release(`user:${userId}`).catch(() => undefined);
+    }
 
     if (dto.couponCode) {
       try {
@@ -414,6 +424,20 @@ export class PaymentsService {
         }
       }
 
+      if (this.stockReservationService) {
+        await this.stockReservationService.release(payment.checkoutId).catch(() => undefined);
+      }
+
+      const phone = (payment.metadata as any)?.phone as string | undefined;
+      if (this.whatsappService && phone && updatedOrders.length > 0) {
+        const totalInr = Math.round(Number(payment.amount || 0) / 100);
+        void this.whatsappService
+          .sendOrderConfirmation(phone, updatedOrders[0].id, totalInr)
+          .catch((err: any) =>
+            this.logger.warn(`WhatsApp UPI confirmation failed: ${err?.message}`),
+          );
+      }
+
       this.logger.log(`Payment verified and orders confirmed for checkout ${payment.checkoutId}`);
 
       return {
@@ -568,6 +592,20 @@ export class PaymentsService {
           paymentMethod: 'COD',
         });
       }
+    }
+
+    if (this.stockReservationService) {
+      await this.stockReservationService.release(checkoutId).catch(() => undefined);
+    }
+
+    const phone = (payment.metadata as any)?.phone as string | undefined;
+    if (this.whatsappService && phone && updatedOrders.length > 0) {
+      const totalInr = Math.round(Number(payment.amount || 0) / 100);
+      void this.whatsappService
+        .sendCodVerificationPrompt(phone, updatedOrders[0].id, totalInr)
+        .catch((err: any) =>
+          this.logger.warn(`WhatsApp COD prompt failed: ${err?.message}`),
+        );
     }
 
     this.logger.log(`COD checkout ${checkoutId} confirmed`);

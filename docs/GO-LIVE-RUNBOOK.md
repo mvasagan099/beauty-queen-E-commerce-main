@@ -70,6 +70,7 @@ Verify key production endpoints:
 - `https://yourdomain.com/manifest.webmanifest` — Installable PWA manifest
 
 ## 6. Enable Automated GitHub Actions Deploys (Optional)
-Once your server is ready, add these secrets under **GitHub Repository → Settings → Environments (`staging` / `production`)** so `.github/workflows/deploy.yml` automatically deploys every green `main` build:
-- **Staging:** `STAGING_HOST`, `STAGING_USER`, `STAGING_SSH_KEY`, `STAGING_URL`
-- **Production:** `PRODUCTION_HOST`, `PRODUCTION_USER`, `PRODUCTION_SSH_KEY`, `PRODUCTION_URL`, `MYSQL_ROOT_PASSWORD`
+Once your server is ready, configure the secrets and opt-in variables under **GitHub Repository → Settings → Secrets and variables → Actions** so `.github/workflows/deploy.yml` automatically deploys every green `main` build:
+- **Repository Variables:** set `ENABLE_STAGING_DEPLOY=true` and/or `ENABLE_PRODUCTION_DEPLOY=true`
+- **Staging Secrets (`staging` environment):** `STAGING_HOST`, `STAGING_USER`, `STAGING_SSH_KEY`, `STAGING_URL`
+- **Production Secrets (`production` environment):** `PRODUCTION_HOST`, `PRODUCTION_USER`, `PRODUCTION_SSH_KEY`, `PRODUCTION_URL`, `MYSQL_ROOT_PASSWORD`

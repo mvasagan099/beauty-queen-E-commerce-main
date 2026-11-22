@@ -2,9 +2,12 @@ import {
   Injectable,
   Logger,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { WhatsAppService } from '../notifications/whatsapp.service';
+import { StockReservationService } from '../inventory/stock-reservation.service';
 import { CouponsService } from '../coupons/coupons.service';
 import { RedisService } from '../common/redis.service';
 import { RazorpayService } from './razorpay.service';
@@ -39,6 +42,8 @@ export class WebhookService {
     private notifications: NotificationsService,
     private couponsService: CouponsService,
     private redisService: RedisService,
+    @Optional() private stockReservationService?: StockReservationService,
+    @Optional() private whatsappService?: WhatsAppService,
   ) {}
 
   async processWebhook(event: string, payload: any): Promise<WebhookProcessResult> {
@@ -231,7 +236,10 @@ export class WebhookService {
           providerPaymentId: entity.id,
           status: PAYMENT_STATUS.CAPTURED,
           method: entity.method || payment.method,
-          metadata: this.buildPaymentMetadata(entity),
+          metadata: {
+            ...((payment.metadata as any) || {}),
+            ...(this.buildPaymentMetadata(entity) as any),
+          } as any,
         },
       });
 
@@ -255,6 +263,10 @@ export class WebhookService {
       }
     });
 
+    if (this.stockReservationService) {
+      await this.stockReservationService.release(payment.checkoutId).catch(() => undefined);
+    }
+
     this.logger.log(`Webhook captured: ${pendingOrders.length} orders confirmed for checkout ${payment.checkoutId}`);
 
     for (const order of pendingOrders) {
@@ -265,6 +277,18 @@ export class WebhookService {
         amount: Number(order.totalAmount || 0),
         paymentMethod: entity.method || 'upi',
       });
+    }
+
+    const phone =
+      ((payment.metadata as any)?.phone as string | undefined) ||
+      ((payment as any).user?.phone as string | undefined);
+    if (this.whatsappService && phone && pendingOrders.length > 0) {
+      const totalInr = Math.round(Number(payment.amount || 0) / 100);
+      void this.whatsappService
+        .sendOrderConfirmation(phone, pendingOrders[0].id, totalInr)
+        .catch((err: any) =>
+          this.logger.warn(`Webhook WhatsApp confirmation failed: ${err?.message}`),
+        );
     }
 
     this.logger.log(`Webhook captured: payment ${entity.id} -> orders confirmed`);

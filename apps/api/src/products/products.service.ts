@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, Logger, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+  ForbiddenException,
+  Optional,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
 import { ImageService } from '../common/image.service';
@@ -6,6 +13,7 @@ import { SearchService } from '../search/search.service';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/types/audit.types';
 import { resolveProductSize, tryResolveProductSize } from '../common/product-size.util';
+import { StockReservationService } from '../inventory/stock-reservation.service';
 
 @Injectable()
 export class ProductsService {
@@ -16,6 +24,7 @@ export class ProductsService {
     private imageService: ImageService,
     private searchService: SearchService,
     private auditService: AuditService,
+    @Optional() private stockReservationService?: StockReservationService,
   ) {}
 
   private inStockWhere() {
@@ -532,7 +541,15 @@ export class ProductsService {
   async getAvailableSizeQty(product: any, size: string): Promise<number> {
     const resolved = tryResolveProductSize(size);
     if (!resolved) return 0;
-    return product?.[resolved.prismaField] || 0;
+    const rawQty = Number(product?.[resolved.prismaField] || 0);
+    if (rawQty <= 0 || !this.stockReservationService || !product?.id) {
+      return rawQty;
+    }
+    const reserved = await this.stockReservationService.getReservedQuantity(
+      product.id,
+      resolved.canonicalSize,
+    );
+    return Math.max(0, rawQty - reserved);
   }
 
   async validateSize(product: any, size: string): Promise<void> {

@@ -19,13 +19,15 @@ import { Request, Response } from 'express';
 @Injectable()
 export class CsrfService {
   private readonly logger = new Logger(CsrfService.name);
+  private readonly fallbackSecret = crypto.randomBytes(32).toString('hex');
 
   constructor(private configService: ConfigService) {}
 
   private get secret(): string {
     return (
       this.configService.get<string>('CSRF_SECRET') ||
-      crypto.randomBytes(32).toString('hex')
+      this.configService.get<string>('JWT_ACCESS_SECRET') ||
+      this.fallbackSecret
     );
   }
 

@@ -14,9 +14,22 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["shopping", "lifestyle", "beauty"],
     icons: [
       {
-        src: "/images/editorial/saree.jpg",
+        src: "/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icon-512.png",
         sizes: "512x512",
-        type: "image/jpeg",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
       },
     ],
   };

@@ -229,4 +229,24 @@ describe('ProductsService', () => {
       });
     });
   });
+
+  describe('getAvailableSizeQty with stock reservations', () => {
+    it('subtracts active Redis reservations from raw size stock and floors at 0', async () => {
+      const mockReservationService = {
+        getReservedQuantity: jest.fn().mockResolvedValueOnce(3).mockResolvedValueOnce(9),
+      };
+      const svcWithReservations = new ProductsService(
+        prisma as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockReservationService as any,
+      );
+
+      const product = { id: 42, sizeM: 5 };
+      expect(await svcWithReservations.getAvailableSizeQty(product, 'M')).toBe(2);
+      expect(await svcWithReservations.getAvailableSizeQty(product, 'M')).toBe(0);
+      expect(mockReservationService.getReservedQuantity).toHaveBeenCalledWith(42, 'M');
+    });
+  });
 });

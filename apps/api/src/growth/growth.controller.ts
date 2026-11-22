@@ -11,6 +11,7 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { GrowthService, FlashSaleBanner } from './growth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { CsrfGuard } from '../common/csrf/csrf.guard';
 import { Role } from '@prisma/client';
 
 @ApiTags('Growth')
@@ -26,7 +27,7 @@ export class GrowthController {
   }
 
   @Put('banner')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Update storefront announcement / flash sale banner (admin)' })
   async updateBanner(@Body() body: Partial<FlashSaleBanner>) {
@@ -44,7 +45,7 @@ export class GrowthController {
   }
 
   @Post('loyalty/referral')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
   @Roles(Role.CUSTOMER)
   @ApiOperation({ summary: 'Redeem a friend’s Queen’s Circle referral code (+200 pts each)' })
   async applyReferral(@Request() req: any, @Body('code') code: string) {

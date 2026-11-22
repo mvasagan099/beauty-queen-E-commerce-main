@@ -7,6 +7,7 @@ import { BuyNowCheckoutDto, CartCheckoutDto } from './dto/checkout.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { RateLimit, RateLimitGuard } from '../common/rate-limit.guard';
+import { CsrfGuard } from '../common/csrf/csrf.guard';
 import { Role } from '@prisma/client';
 
 class BuyNowItemDto {
@@ -43,9 +44,8 @@ class CheckoutPreviewDto {
 }
 
 @ApiTags('Checkout')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard, RateLimitGuard)
 @Roles(Role.CUSTOMER)
-@UseGuards(RateLimitGuard)
 @Controller('checkout')
 export class CheckoutController {
   constructor(private checkoutService: CheckoutService) {}

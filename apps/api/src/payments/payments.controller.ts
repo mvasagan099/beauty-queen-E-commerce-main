@@ -26,6 +26,7 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import { RateLimit, RateLimitGuard } from '../common/rate-limit.guard';
+import { CsrfGuard } from '../common/csrf/csrf.guard';
 import { PAYMENT_RATE_LIMITS } from './types/payment-status';
 
 @ApiTags('Payments')
@@ -38,7 +39,7 @@ export class PaymentsController {
   ) {}
 
   @Post('checkout')
-  @UseGuards(JwtAuthGuard, RolesGuard, RateLimitGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard, RateLimitGuard)
   @Roles(Role.CUSTOMER)
   @RateLimit('create_checkout', PAYMENT_RATE_LIMITS.createOrder.max, PAYMENT_RATE_LIMITS.createOrder.windowSeconds)
   @ApiOperation({ summary: 'Create checkout - validates cart, calculates amount, creates orders' })
@@ -48,7 +49,7 @@ export class PaymentsController {
   }
 
   @Post('create-order')
-  @UseGuards(JwtAuthGuard, RolesGuard, RateLimitGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard, RateLimitGuard)
   @Roles(Role.CUSTOMER)
   @RateLimit('create_order', PAYMENT_RATE_LIMITS.createOrder.max, PAYMENT_RATE_LIMITS.createOrder.windowSeconds)
   @ApiOperation({ summary: 'Create (or reuse) a Razorpay order for a checkout' })
@@ -61,7 +62,7 @@ export class PaymentsController {
   }
 
   @Post('verify')
-  @UseGuards(JwtAuthGuard, RolesGuard, RateLimitGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard, RateLimitGuard)
   @Roles(Role.CUSTOMER)
   @RateLimit('verify', PAYMENT_RATE_LIMITS.verify.max, PAYMENT_RATE_LIMITS.verify.windowSeconds)
   @ApiOperation({ summary: 'Verify Razorpay payment signature and confirm order' })
@@ -71,7 +72,7 @@ export class PaymentsController {
   }
 
   @Post('cod/confirm')
-  @UseGuards(JwtAuthGuard, RolesGuard, RateLimitGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard, RateLimitGuard)
   @Roles(Role.CUSTOMER)
   @RateLimit('cod_confirm', PAYMENT_RATE_LIMITS.createOrder.max, PAYMENT_RATE_LIMITS.createOrder.windowSeconds)
   @ApiOperation({ summary: 'Confirm COD order' })
@@ -81,7 +82,7 @@ export class PaymentsController {
   }
 
   @Post('retry')
-  @UseGuards(JwtAuthGuard, RolesGuard, RateLimitGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard, RateLimitGuard)
   @Roles(Role.CUSTOMER)
   @RateLimit('retry', PAYMENT_RATE_LIMITS.retry.max, PAYMENT_RATE_LIMITS.retry.windowSeconds)
   @ApiOperation({ summary: 'Retry a failed payment for a checkout' })
@@ -112,7 +113,7 @@ export class PaymentsController {
   }
 
   @Post(':paymentId/refund')
-  @UseGuards(JwtAuthGuard, RolesGuard, RateLimitGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard, RateLimitGuard)
   @Roles(Role.ADMIN)
   @RateLimit('refund', PAYMENT_RATE_LIMITS.refund.max, PAYMENT_RATE_LIMITS.refund.windowSeconds)
   @ApiOperation({ summary: 'Admin - refund a captured payment (full or partial)' })
