@@ -471,6 +471,118 @@ export class GrowthService {
     return { success: true, subscribed: false };
   }
 
+  // ─── Native Mobile Expo Push Tokens (FCM / APNs) ──────────────
+
+  async saveExpoPushToken(
+    userId: number,
+    payload: { token?: string; platform?: string; deviceName?: string },
+  ) {
+    const token = String(payload?.token || '').trim();
+    if (!/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/.test(token)) {
+      throw new BadRequestException('Valid Expo push token is required');
+    }
+
+    const key = `push:expo:user:${userId}`;
+    const stored = await this.prisma.siteConfig
+      .findUnique({ where: { key } })
+      .catch(() => null);
+    const existing = Array.isArray((stored?.value as any)?.tokens)
+      ? ((stored?.value as any).tokens as Array<{
+          token: string;
+          platform: string;
+          deviceName: string | null;
+          updatedAt: string;
+        }>)
+      : [];
+
+    const filtered = existing.filter((entry) => entry.token !== token);
+    const nextTokens = [
+      ...filtered.slice(-4),
+      {
+        token: token.slice(0, 200),
+        platform: String(payload?.platform || 'unknown').slice(0, 24),
+        deviceName: payload?.deviceName ? String(payload.deviceName).slice(0, 80) : null,
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+
+    await this.prisma.siteConfig.upsert({
+      where: { key },
+      update: { value: { tokens: nextTokens } as any },
+      create: { key, value: { tokens: nextTokens } as any },
+    });
+
+    return { success: true, registered: true, deviceCount: nextTokens.length };
+  }
+
+  async removeExpoPushToken(userId: number, token?: string) {
+    const key = `push:expo:user:${userId}`;
+    if (!token) {
+      await this.prisma.siteConfig.deleteMany({ where: { key } });
+      return { success: true, registered: false, deviceCount: 0 };
+    }
+
+    const stored = await this.prisma.siteConfig
+      .findUnique({ where: { key } })
+      .catch(() => null);
+    const existing = Array.isArray((stored?.value as any)?.tokens)
+      ? ((stored?.value as any).tokens as Array<{ token: string }>)
+      : [];
+    const remaining = existing.filter((entry) => entry.token !== token.trim());
+
+    if (remaining.length === 0) {
+      await this.prisma.siteConfig.deleteMany({ where: { key } });
+    } else {
+      await this.prisma.siteConfig.upsert({
+        where: { key },
+        update: { value: { tokens: remaining } as any },
+        create: { key, value: { tokens: remaining } as any },
+      });
+    }
+
+    return { success: true, registered: remaining.length > 0, deviceCount: remaining.length };
+  }
+
+  async sendExpoPushNotification(
+    userId: number,
+    message: { title: string; body: string; data?: Record<string, unknown> },
+  ): Promise<{ sent: number }> {
+    const key = `push:expo:user:${userId}`;
+    const stored = await this.prisma.siteConfig
+      .findUnique({ where: { key } })
+      .catch(() => null);
+    const tokens = Array.isArray((stored?.value as any)?.tokens)
+      ? ((stored?.value as any).tokens as Array<{ token: string }>).map((t) => t.token)
+      : [];
+
+    if (tokens.length === 0) {
+      return { sent: 0 };
+    }
+
+    try {
+      const messages = tokens.map((to) => ({
+        to,
+        sound: 'default',
+        title: message.title,
+        body: message.body,
+        data: message.data || {},
+        channelId: 'atelier-updates',
+      }));
+      await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messages),
+      });
+      return { sent: tokens.length };
+    } catch (err: any) {
+      this.logger.warn(`Expo push dispatch failed for user ${userId}: ${err?.message}`);
+      return { sent: 0 };
+    }
+  }
+
   // ─── "Shop the Look" Outfit Bundles ────────────────────────────
 
   async getShopTheLookBundles(): Promise<ShopTheLookBundle[]> {

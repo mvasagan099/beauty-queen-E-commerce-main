@@ -64,9 +64,12 @@ export default function CheckoutScreen() {
     enabled: Boolean(user && subtotal > 0),
   });
 
-  const pointsDiscount = redeemPoints
-    ? Number(loyaltyPreviewQuery.data?.discountAmount ?? 0)
-    : 0;
+  const previewDiscountInr = Number(
+    loyaltyPreviewQuery.data?.discountInr ??
+      loyaltyPreviewQuery.data?.discountAmount ??
+      0
+  );
+  const pointsDiscount = redeemPoints ? previewDiscountInr : 0;
   const availablePoints = Number(loyaltyPreviewQuery.data?.availablePoints ?? 0);
   const redeemablePoints = Number(loyaltyPreviewQuery.data?.redeemablePoints ?? 0);
 
@@ -126,8 +129,8 @@ export default function CheckoutScreen() {
         paymentMethod,
       });
 
-      const checkoutId: string | undefined =
-        checkoutRes?.data?.checkoutId ?? checkoutRes?.checkoutId;
+      const checkoutData = checkoutRes?.data ?? checkoutRes;
+      const checkoutId: string | undefined = checkoutData?.checkoutId;
 
       if (paymentMethod === "cod" && checkoutId) {
         await paymentsApi.confirmCod(checkoutId);
@@ -140,13 +143,35 @@ export default function CheckoutScreen() {
           [{ text: "View Orders", onPress: () => router.replace("/orders" as any) }]
         );
       } else {
+        let razorpayOrderId: string = checkoutData?.razorpayOrderId || "";
+        let razorpayKeyId: string = checkoutData?.razorpayKeyId || "";
+        const payableAmount = Number(checkoutData?.totalAmount ?? estimatedTotal);
+
+        if (checkoutId && (!razorpayOrderId || !razorpayKeyId)) {
+          try {
+            const orderRes = await paymentsApi.createOrder(checkoutId);
+            const orderData = orderRes?.data ?? orderRes;
+            razorpayOrderId = orderData?.razorpayOrderId || razorpayOrderId;
+            razorpayKeyId = orderData?.keyId || razorpayKeyId;
+          } catch {
+            // fallback screen inside /payment handles missing gateway key gracefully
+          }
+        }
+
         await queryClient.invalidateQueries({ queryKey: ["cart"] });
         await queryClient.invalidateQueries({ queryKey: ["orders"] });
-        Alert.alert(
-          "UPI Checkout Initiated",
-          `Checkout ${checkoutId || ""} created. Complete UPI payment via Razorpay or view your order status in My Orders.`,
-          [{ text: "View Orders", onPress: () => router.replace("/orders" as any) }]
-        );
+        router.replace({
+          pathname: "/payment",
+          params: {
+            checkoutId: checkoutId || "",
+            razorpayOrderId,
+            razorpayKeyId,
+            amount: String(payableAmount),
+            name: name.trim(),
+            email: email.trim(),
+            phone: phone.trim(),
+          },
+        } as any);
       }
     } catch (err: any) {
       Alert.alert(
@@ -247,7 +272,7 @@ export default function CheckoutScreen() {
             <Text style={styles.toggleSub}>
               {availablePoints > 0
                 ? `Use ${redeemablePoints} of ${availablePoints} pts to save ${formatPrice(
-                    Number(loyaltyPreviewQuery.data?.discountAmount ?? 0)
+                    previewDiscountInr
                   )}`
                 : "Earn points with every Atelier purchase (10 pts = ₹1)"}
             </Text>

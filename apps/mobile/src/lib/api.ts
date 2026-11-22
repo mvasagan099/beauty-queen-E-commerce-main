@@ -108,7 +108,8 @@ export const mobileApi = {
     request<T>(endpoint, { method: "POST", json }),
   put: <T = any>(endpoint: string, json?: unknown) =>
     request<T>(endpoint, { method: "PUT", json }),
-  delete: <T = any>(endpoint: string) => request<T>(endpoint, { method: "DELETE" }),
+  delete: <T = any>(endpoint: string, json?: unknown) =>
+    request<T>(endpoint, { method: "DELETE", json }),
 };
 
 export const authApi = {
@@ -173,6 +174,17 @@ export const paymentsApi = {
   }) => mobileApi.post("/payments/checkout", data),
   confirmCod: (checkoutId: string) =>
     mobileApi.post("/payments/cod/confirm", { checkoutId }),
+  createOrder: (checkoutId: string) =>
+    mobileApi.post("/payments/create-order", { checkoutId }),
+  verifyPayment: (data: {
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+  }) => mobileApi.post("/payments/verify", data),
+  retryPayment: (checkoutId: string) =>
+    mobileApi.post("/payments/retry", { checkoutId }),
+  checkoutStatus: (checkoutId: string) =>
+    mobileApi.get(`/payments/checkout/${encodeURIComponent(checkoutId)}/status`),
 };
 
 export const ordersApi = {
@@ -195,4 +207,11 @@ export const growthApi = {
     mobileApi.get(
       `/shipping/calculate?pincode=${encodeURIComponent(pincode)}&subtotal=${subtotal}`
     ),
+  registerExpoPushToken: (payload: {
+    token: string;
+    platform: string;
+    deviceName?: string;
+  }) => mobileApi.post("/growth/push/expo-token", payload),
+  removeExpoPushToken: (token?: string) =>
+    mobileApi.delete("/growth/push/expo-token", token ? { token } : undefined),
 };

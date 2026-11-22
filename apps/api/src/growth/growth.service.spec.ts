@@ -18,6 +18,10 @@ describe('GrowthService', () => {
           configStore.set(where.key, update.value);
           return { key: where.key, value: update.value };
         }),
+        deleteMany: jest.fn(async ({ where }: any) => {
+          configStore.delete(where.key);
+          return { count: 1 };
+        }),
       },
       order: {
         findMany: jest.fn(async () => []),
@@ -121,5 +125,28 @@ describe('GrowthService', () => {
     expect(saved).toHaveLength(1);
     const loaded = await service.getProductSwatches(99, 'Cosmetics');
     expect(loaded[0].name).toBe('Madras Ruby');
+  });
+
+  it('validates, deduplicates, and removes Expo native push tokens', async () => {
+    await expect(
+      service.saveExpoPushToken(42, { token: 'invalid-token', platform: 'android' }),
+    ).rejects.toThrow(BadRequestException);
+
+    const first = await service.saveExpoPushToken(42, {
+      token: 'ExponentPushToken[abc123XYZ]',
+      platform: 'android',
+      deviceName: 'Pixel 9',
+    });
+    expect(first).toEqual({ success: true, registered: true, deviceCount: 1 });
+
+    // Re-registering same token deduplicates
+    const duplicate = await service.saveExpoPushToken(42, {
+      token: 'ExponentPushToken[abc123XYZ]',
+      platform: 'android',
+    });
+    expect(duplicate.deviceCount).toBe(1);
+
+    const removed = await service.removeExpoPushToken(42, 'ExponentPushToken[abc123XYZ]');
+    expect(removed).toEqual({ success: true, registered: false, deviceCount: 0 });
   });
 });

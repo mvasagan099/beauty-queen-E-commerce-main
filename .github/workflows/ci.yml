@@ -231,3 +231,21 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report/
           retention-days: 7
+
+  mobile-typecheck:
+    name: Mobile App Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Install Mobile dependencies
+        run: cd apps/mobile && npm ci
+
+      - name: Typecheck Mobile App
+        run: cd apps/mobile && npm run typecheck
+

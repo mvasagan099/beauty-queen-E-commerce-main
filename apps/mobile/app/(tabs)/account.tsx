@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   Pressable,
+  Switch,
   StyleSheet,
   ActivityIndicator,
   Alert,
@@ -14,6 +15,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { AtelierTheme, formatPrice } from "../../src/theme/atelier";
 import { useAuthStore } from "../../src/store";
 import { growthApi } from "../../src/lib/api";
+import {
+  getSavedExpoPushToken,
+  registerForAtelierNotifications,
+  unregisterAtelierNotifications,
+} from "../../src/lib/notifications";
 import { LoyaltySummary } from "../../src/types";
 
 export default function AccountScreen() {
@@ -21,6 +27,12 @@ export default function AccountScreen() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+
+  useEffect(() => {
+    void getSavedExpoPushToken().then((token) => setPushEnabled(Boolean(token)));
+  }, [user]);
 
   const loyaltyQuery = useQuery({
     queryKey: ["loyalty"],
@@ -30,6 +42,36 @@ export default function AccountScreen() {
 
   const loyalty: LoyaltySummary | null = loyaltyQuery.data?.loyalty ?? null;
 
+  const handleTogglePush = async (next: boolean) => {
+    if (!user) {
+      router.push("/login" as any);
+      return;
+    }
+    setPushBusy(true);
+    try {
+      if (next) {
+        const res = await registerForAtelierNotifications();
+        if (res.ok) {
+          setPushEnabled(true);
+          Alert.alert(
+            "Alerts Enabled",
+            "You'll receive order dispatch updates and festive Atelier drop alerts."
+          );
+        } else {
+          setPushEnabled(false);
+          Alert.alert("Notifications", res.reason || "Could not enable push alerts.");
+        }
+      } else {
+        await unregisterAtelierNotifications();
+        setPushEnabled(false);
+      }
+    } catch (err: any) {
+      Alert.alert("Notifications Error", err?.message || "Please try again.");
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out of Beauty Queen?", [
       { text: "Cancel", style: "cancel" },
@@ -37,7 +79,9 @@ export default function AccountScreen() {
         text: "Sign Out",
         style: "destructive",
         onPress: async () => {
+          await unregisterAtelierNotifications().catch(() => undefined);
           await signOut();
+          setPushEnabled(false);
           queryClient.clear();
         },
       },
@@ -127,6 +171,37 @@ export default function AccountScreen() {
               </View>
             </>
           ) : null}
+        </View>
+      ) : null}
+
+      {/* Push Notifications Card */}
+      {user ? (
+        <View style={styles.menuCard}>
+          <View style={styles.menuRow}>
+            <View style={[styles.menuLeft, { flex: 1, paddingRight: 10 }]}>
+              <Ionicons
+                name="notifications-outline"
+                size={20}
+                color={AtelierTheme.colors.crimson}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuTitle}>Order & Drop Alerts</Text>
+                <Text style={styles.memberEmail}>
+                  Native push notifications for dispatch, restocks & flash sales
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={pushEnabled}
+              onValueChange={handleTogglePush}
+              disabled={pushBusy}
+              trackColor={{
+                false: AtelierTheme.colors.border,
+                true: AtelierTheme.colors.crimson,
+              }}
+              thumbColor={AtelierTheme.colors.silkCard}
+            />
+          </View>
         </View>
       ) : null}
 

@@ -45,6 +45,10 @@ export default function RootLayout() {
             options={{ title: "Atelier Checkout" }}
           />
           <Stack.Screen
+            name="payment"
+            options={{ title: "UPI / Card Payment" }}
+          />
+          <Stack.Screen
             name="login"
             options={{ title: "Sign In", presentation: "modal" }}
           />

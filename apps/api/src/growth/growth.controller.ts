@@ -110,6 +110,28 @@ export class GrowthController {
     return this.growthService.removePushSubscription(req.user.sub);
   }
 
+  @Post('push/expo-token')
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
+  @Roles(Role.CUSTOMER)
+  @ApiOperation({ summary: 'Register Expo native push token (Android FCM / iOS APNs)' })
+  async subscribeExpoPush(
+    @Request() req: any,
+    @Body() body: { token?: string; platform?: string; deviceName?: string },
+  ) {
+    return this.growthService.saveExpoPushToken(req.user.sub, body);
+  }
+
+  @Delete('push/expo-token')
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
+  @Roles(Role.CUSTOMER)
+  @ApiOperation({ summary: 'Unregister Expo native push token' })
+  async unsubscribeExpoPush(
+    @Request() req: any,
+    @Body() body?: { token?: string },
+  ) {
+    return this.growthService.removeExpoPushToken(req.user.sub, body?.token);
+  }
+
   @Get('abandoned-carts/stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

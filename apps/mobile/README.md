@@ -8,9 +8,10 @@ Native mobile storefront for **Beauty Queen** (*"Your Beauty, Our Priority"*) bu
 - **Explore & Discovery** (`app/(tabs)/explore.tsx`): Debounced search, category chips, size (`S`–`XXL`, `FREE_SIZE`) & sort filters, pull-to-refresh 2-column grid.
 - **Product Detail** (`app/product/[id].tsx`): Swipeable gallery, interactive color/shade swatches, size stock selector, Indian 6-digit pincode delivery & COD estimator, Add to Bag & Buy Now.
 - **Shopping Bag** (`app/(tabs)/bag.tsx`): Instant guest Zustand bag + authenticated server cart sync on login, ₹999 free-shipping progress bar, quantity controls.
-- **Atelier Checkout** (`app/checkout.tsx`): Delivery address, coupon code, **Queen's Circle** loyalty points redemption (`10 pts = ₹1`, 15% cap), **Festive Silk Gift Wrap (+₹49)** & personal note, COD & UPI checkout.
+- **Atelier Checkout & Razorpay UPI** (`app/checkout.tsx`, `app/payment.tsx`): Delivery address, coupon code, **Queen's Circle** loyalty points redemption (`10 pts = ₹1`, 15% cap), **Festive Silk Gift Wrap (+₹49)** & personal note, COD, and Razorpay Standard Checkout WebView with native UPI app intent handoff (GPay, PhonePe, Paytm, BHIM), signature verification, and 1-tap retry.
+- **Native Push Notifications** (`src/lib/notifications.ts`): Registers Android FCM / iOS APNs Expo push tokens with `POST /api/growth/push/expo-token` for order dispatch and drop alerts.
 - **Passwordless Email OTP Auth** (`app/login.tsx`): Uses `x-client-platform: mobile` to obtain JWT access & refresh tokens persisted in `expo-secure-store` with automatic 401 refresh rotation.
-- **Queen's Circle & Orders** (`app/(tabs)/account.tsx`, `app/orders.tsx`): Live loyalty tier, points balance, referral code, and order history.
+- **Queen's Circle & Orders** (`app/(tabs)/account.tsx`, `app/orders.tsx`): Live loyalty tier, points balance, referral code, notification controls, and order history.
 
 ---
 
