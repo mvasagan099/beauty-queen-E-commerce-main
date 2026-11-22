@@ -16,6 +16,7 @@ import { CouponsService } from '../coupons/coupons.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WhatsAppService } from '../notifications/whatsapp.service';
 import { StockReservationService } from '../inventory/stock-reservation.service';
+import { GrowthService } from '../growth/growth.service';
 import { resolveProductSize } from '../common/product-size.util';
 import {
   CreateCheckoutDto,
@@ -36,6 +37,8 @@ import {
 } from './types/payment-status';
 import { v4 as uuidv4 } from 'uuid';
 
+const GIFT_WRAP_FEE_INR = 49;
+
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
@@ -51,6 +54,7 @@ export class PaymentsService {
     private redisService: RedisService,
     @Optional() private stockReservationService?: StockReservationService,
     @Optional() private whatsappService?: WhatsAppService,
+    @Optional() private growthService?: GrowthService,
   ) {}
 
   async createCheckout(userId: number, dto: CreateCheckoutDto) {
@@ -90,6 +94,26 @@ export class PaymentsService {
       district: dto.district,
     });
 
+    const giftWrap = Boolean(dto.giftWrap);
+    const giftWrapFee = giftWrap ? GIFT_WRAP_FEE_INR : 0;
+    const giftNote = dto.giftNote ? dto.giftNote.trim().slice(0, 240) : null;
+
+    let loyaltyDiscount = 0;
+    let loyaltyPointsToRedeem = 0;
+    if (dto.redeemPoints && this.growthService) {
+      const preview = await this.growthService.previewPointsRedemption(
+        userId,
+        pricing.subtotal,
+      );
+      loyaltyDiscount = preview.discountInr;
+      loyaltyPointsToRedeem = preview.redeemablePoints;
+    }
+
+    const adjustedTotal = Math.max(
+      0,
+      pricing.total - loyaltyDiscount + giftWrapFee,
+    );
+
     const calculated: CalculatedCheckout = {
       checkoutId,
       items: pricing.items.map((item) => ({
@@ -105,8 +129,8 @@ export class PaymentsService {
       couponDiscount: pricing.couponDiscount,
       shipping: pricing.shipping,
       tax: pricing.tax,
-      totalAmount: pricing.total,
-      totalAmountPaise: pricing.total * 100,
+      totalAmount: adjustedTotal,
+      totalAmountPaise: adjustedTotal * 100,
     };
 
     const orders: any[] = [];
@@ -151,7 +175,7 @@ export class PaymentsService {
             couponDiscount: pricing.couponDiscount,
             shippingAmount: pricing.shipping,
             taxAmount: pricing.tax,
-            totalAmount: pricing.total,
+            totalAmount: adjustedTotal,
             username: dto.name,
             email: dto.email,
             address: dto.address,
@@ -194,6 +218,11 @@ export class PaymentsService {
             source: dto.source,
             couponCode: dto.couponCode || null,
             phone: dto.phone || null,
+            giftWrap,
+            giftWrapFee,
+            giftNote,
+            loyaltyPointsRedeemed: loyaltyPointsToRedeem,
+            loyaltyDiscount,
             attempts: 0,
           } as any,
         },
@@ -202,6 +231,14 @@ export class PaymentsService {
 
     if (this.stockReservationService) {
       await this.stockReservationService.release(`user:${userId}`).catch(() => undefined);
+    }
+
+    if (loyaltyPointsToRedeem > 0 && this.growthService) {
+      await this.growthService
+        .redeemPointsForCheckout(userId, pricing.subtotal, checkoutId)
+        .catch((err: any) =>
+          this.logger.warn(`Failed to deduct loyalty points: ${err?.message}`),
+        );
     }
 
     if (dto.couponCode) {
@@ -213,7 +250,7 @@ export class PaymentsService {
     }
 
     this.logger.log(
-      `Checkout ${checkoutId} created: ${orders.length} orders, total ${calculated.totalAmount} INR (discount: ${calculated.productDiscount + calculated.couponDiscount}, shipping: ${calculated.shipping}, tax: ${calculated.tax})`,
+      `Checkout ${checkoutId} created: ${orders.length} orders, total ${calculated.totalAmount} INR (discount: ${calculated.productDiscount + calculated.couponDiscount + loyaltyDiscount}, giftWrap: ${giftWrapFee}, shipping: ${calculated.shipping}, tax: ${calculated.tax})`,
     );
 
     let razorpayOrder = null;
@@ -242,6 +279,11 @@ export class PaymentsService {
       productDiscount: calculated.productDiscount,
       couponCode: calculated.couponCode,
       couponDiscount: calculated.couponDiscount,
+      loyaltyPointsRedeemed: loyaltyPointsToRedeem,
+      loyaltyDiscount,
+      giftWrap,
+      giftWrapFee,
+      giftNote,
       shipping: calculated.shipping,
       tax: calculated.tax,
       totalAmount: calculated.totalAmount,

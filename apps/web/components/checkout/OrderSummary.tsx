@@ -26,6 +26,9 @@ interface OrderSummaryProps {
   couponError: string;
   isApplyingCoupon: boolean;
   appliedCoupon: { code: string; calculatedDiscount: number } | null;
+  loyaltyDiscount?: number;
+  redeemedPoints?: number;
+  giftWrapFee?: number;
   isProcessing: boolean;
   paymentMethod: "upi" | "cod";
   onCouponCodeChange: (value: string) => void;
@@ -42,13 +45,19 @@ export function OrderSummary({
   couponError,
   isApplyingCoupon,
   appliedCoupon,
+  loyaltyDiscount = 0,
+  redeemedPoints = 0,
+  giftWrapFee = 0,
   isProcessing,
   paymentMethod,
   onCouponCodeChange,
   onApplyCoupon,
   onRemoveCoupon,
 }: OrderSummaryProps) {
-  const total = Math.max(0, subtotal - productDiscount - couponDiscount);
+  const total = Math.max(
+    0,
+    subtotal - productDiscount - couponDiscount - loyaltyDiscount + giftWrapFee
+  );
 
   return (
     <Card className="sticky top-24">
@@ -129,6 +138,19 @@ export function OrderSummary({
           </div>
           {couponError && <p className="text-xs text-red-500 mt-1">{couponError}</p>}
 
+          {loyaltyDiscount > 0 && (
+            <div className="flex justify-between text-sm text-amber-700 mt-2">
+              <span>Queen&apos;s Circle ({redeemedPoints} pts)</span>
+              <span>-{formatPrice(loyaltyDiscount)}</span>
+            </div>
+          )}
+          {giftWrapFee > 0 && (
+            <div className="flex justify-between text-sm text-foreground mt-1">
+              <span>Festive Silk Gift Wrap</span>
+              <span>+{formatPrice(giftWrapFee)}</span>
+            </div>
+          )}
+
           <div className="flex justify-between text-sm mt-1">
             <span>Shipping</span>
             <span className="text-green-600">Free</span>
@@ -139,12 +161,12 @@ export function OrderSummary({
           </div>
           <div className="flex justify-between font-bold text-lg mt-3">
             <span>Total</span>
-            <span className="text-pink-500">{formatPrice(total)}</span>
+            <span className="text-primary">{formatPrice(total)}</span>
           </div>
         </div>
         <Button
           type="submit"
-          className="w-full bg-pink-500 hover:bg-pink-600 text-white mt-4"
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground mt-4"
           disabled={isProcessing || items.length === 0}
         >
           {isProcessing ? "Processing..." : paymentMethod === "cod" ? "Place Order" : "Pay Now"}

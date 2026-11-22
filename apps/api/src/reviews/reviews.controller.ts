@@ -1,8 +1,24 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  Request,
+  ParseIntPipe,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ReviewsService } from './reviews.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { CsrfGuard } from '../common/csrf/csrf.guard';
 import { Role, ReviewStatus } from '@prisma/client';
 
 @ApiTags('Reviews')
@@ -43,22 +59,37 @@ export class ReviewsController {
     return this.reviewsService.canReview(req.user.sub, productId);
   }
 
-  @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Post('upload-photo')
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
   @Roles(Role.CUSTOMER)
-  @ApiOperation({ summary: 'Create a review' })
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  @ApiOperation({ summary: 'Upload a compressed review photo (max 5MB)' })
+  async uploadPhoto(@UploadedFile() file: Express.Multer.File) {
+    return this.reviewsService.uploadReviewPhoto(file);
+  }
+
+  @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
+  @Roles(Role.CUSTOMER)
+  @ApiOperation({ summary: 'Create a review with optional photo URLs' })
   async create(
     @Request() req: any,
     @Body('productId') productId: number,
     @Body('rating') rating: number,
     @Body('comment') comment?: string,
     @Body('title') title?: string,
+    @Body('photos') photos?: string[],
   ) {
-    return this.reviewsService.create(req.user.sub, productId, rating, comment, title);
+    return this.reviewsService.create(req.user.sub, productId, rating, comment, title, photos);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
   @Roles(Role.CUSTOMER)
   @ApiOperation({ summary: 'Update a review' })
   async update(
@@ -70,7 +101,7 @@ export class ReviewsController {
   }
 
   @Patch(':id/moderate')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Moderate a review (admin)' })
   async moderate(
@@ -81,7 +112,7 @@ export class ReviewsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CsrfGuard)
   @Roles(Role.CUSTOMER)
   @ApiOperation({ summary: 'Delete a review' })
   async delete(@Request() req: any, @Param('id', ParseIntPipe) id: number) {

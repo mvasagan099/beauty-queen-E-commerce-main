@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Star, BadgeCheck } from "lucide-react";
+import { Star, BadgeCheck, Camera, X } from "lucide-react";
 import { useCreateReview, useCanReview } from "@/hooks/use-account";
+import { reviewsApi } from "@/lib/api";
+import { getProductImageUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +28,8 @@ interface ReviewFormProps {
 
 export function ReviewForm({ productId, onSuccess }: ReviewFormProps) {
   const [hoveredStar, setHoveredStar] = useState(0);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const createMutation = useCreateReview();
   const { data: canReviewData } = useCanReview(productId);
 
@@ -45,13 +49,41 @@ export function ReviewForm({ productId, onSuccess }: ReviewFormProps) {
 
   const currentRating = watch("rating");
 
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const remainingSlots = Math.max(0, 3 - photos.length);
+    const toUpload = files.slice(0, remainingSlots);
+    if (toUpload.length === 0) {
+      toast.error("You can attach up to 3 photos per review");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const uploadedUrls: string[] = [];
+      for (const file of toUpload) {
+        const res = await reviewsApi.uploadPhoto(file);
+        if (res?.url) uploadedUrls.push(res.url);
+      }
+      setPhotos((prev) => [...prev, ...uploadedUrls].slice(0, 3));
+      toast.success(`${uploadedUrls.length} photo${uploadedUrls.length > 1 ? "s" : ""} attached`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to upload photo");
+    } finally {
+      setIsUploading(false);
+      e.target.value = "";
+    }
+  };
+
   const onSubmit = (data: ReviewFormData) => {
     createMutation.mutate(
-      { productId, ...data },
+      { productId, ...data, photos: photos.length > 0 ? photos : undefined },
       {
         onSuccess: () => {
           toast.success("Review submitted");
           reset();
+          setPhotos([]);
           onSuccess?.();
         },
         onError: (err: Error) => {
@@ -111,15 +143,52 @@ export function ReviewForm({ productId, onSuccess }: ReviewFormProps) {
           id="review-comment"
           {...register("comment")}
           rows={3}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-          placeholder="Share your experience with this product"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+          placeholder="Share how the drape, fit, or shade looked on you"
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label className="block">Add Photos (Optional, up to 3)</Label>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {photos.map((url, idx) => (
+            <div key={url} className="relative h-16 w-16 rounded-lg overflow-hidden border border-border">
+              <img
+                src={getProductImageUrl(url)}
+                alt={`Review attachment ${idx + 1}`}
+                className="h-full w-full object-cover"
+              />
+              <button
+                type="button"
+                aria-label="Remove photo"
+                onClick={() => setPhotos((prev) => prev.filter((p) => p !== url))}
+                className="absolute top-0.5 right-0.5 rounded-full bg-black/70 p-0.5 text-white hover:bg-black"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+          {photos.length < 3 && (
+            <label className="flex h-16 w-16 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+              <Camera className="h-4 w-4" />
+              <span className="text-[10px] mt-0.5">{isUploading ? "..." : "Upload"}</span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                disabled={isUploading}
+                onChange={handlePhotoChange}
+                className="hidden"
+              />
+            </label>
+          )}
+        </div>
       </div>
 
       <Button
         type="submit"
-        className="bg-pink-500 hover:bg-pink-600 text-white"
-        disabled={createMutation.isPending}
+        className="bg-primary hover:bg-primary/90 text-primary-foreground"
+        disabled={createMutation.isPending || isUploading}
       >
         {createMutation.isPending ? "Submitting..." : "Submit Review"}
       </Button>

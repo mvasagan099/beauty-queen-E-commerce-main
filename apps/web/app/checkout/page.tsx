@@ -7,9 +7,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { cartApi, paymentsApi, couponsApi } from "@/lib/api";
+import { Crown, Gift } from "lucide-react";
+import { api, cartApi, paymentsApi, couponsApi } from "@/lib/api";
 import { CartResponse } from "@/types";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { useCheckoutStore } from "@/store";
 import { CheckoutForm } from "@/components/checkout/CheckoutForm";
 import { OrderSummary, OrderLineItem } from "@/components/checkout/OrderSummary";
@@ -17,6 +19,8 @@ import {
   RazorpayCheckout,
   RazorpayCheckoutHandle,
 } from "@/components/payment/RazorpayCheckout";
+
+const GIFT_WRAP_FEE = 49;
 
 const checkoutSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -41,6 +45,9 @@ export default function CheckoutPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; calculatedDiscount: number } | null>(null);
   const [couponError, setCouponError] = useState("");
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const [redeemPoints, setRedeemPoints] = useState(false);
+  const [giftWrap, setGiftWrap] = useState(false);
+  const [giftNote, setGiftNote] = useState("");
   const router = useRouter();
   const queryClient = useQueryClient();
   const razorpayRef = useRef<RazorpayCheckoutHandle>(null);
@@ -73,7 +80,6 @@ export default function CheckoutPage() {
     resolver: zodResolver(checkoutSchema),
   });
 
-  const isCartMode = mode === "cart";
   const isBuyNowMode = mode === "buynow" && buyNowItem;
 
   const displayItems: OrderLineItem[] = isBuyNowMode
@@ -95,6 +101,26 @@ export default function CheckoutPage() {
     : cartData?.subtotal || cartData?.total || 0;
   const displayDiscount = isBuyNowMode ? 0 : cartData?.discount || 0;
   const couponDiscountAmount = appliedCoupon?.calculatedDiscount || 0;
+
+  const { data: loyaltyPreview } = useQuery<{
+    success: boolean;
+    availablePoints: number;
+    redeemablePoints: number;
+    discountInr: number;
+    conversionLabel: string;
+  }>({
+    queryKey: ["loyalty-redemption-preview", displaySubtotal],
+    queryFn: () =>
+      api.post("/growth/loyalty/preview-redemption", { subtotal: displaySubtotal }),
+    enabled: displaySubtotal > 0,
+    retry: false,
+  });
+
+  const loyaltyDiscountAmount =
+    redeemPoints && loyaltyPreview ? loyaltyPreview.discountInr : 0;
+  const loyaltyPointsToUse =
+    redeemPoints && loyaltyPreview ? loyaltyPreview.redeemablePoints : 0;
+  const giftWrapFee = giftWrap ? GIFT_WRAP_FEE : 0;
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -124,6 +150,7 @@ export default function CheckoutPage() {
     clearCheckout();
     queryClient.invalidateQueries({ queryKey: ["cart"] });
     queryClient.invalidateQueries({ queryKey: ["payment-status"] });
+    queryClient.invalidateQueries({ queryKey: ["loyalty-summary"] });
     router.push(`/payment/success?checkoutId=${checkoutId}`);
   };
 
@@ -146,6 +173,9 @@ export default function CheckoutPage() {
         district: formData.district,
         landmark: formData.landmark,
         paymentMethod,
+        redeemPoints: redeemPoints && loyaltyDiscountAmount > 0,
+        giftWrap,
+        giftNote: giftWrap && giftNote.trim() ? giftNote.trim() : undefined,
       };
 
       if (appliedCoupon) {
@@ -200,7 +230,7 @@ export default function CheckoutPage() {
   if (cartLoading || (!isBuyNowMode && !cartData)) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-pink-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
   }
@@ -211,7 +241,7 @@ export default function CheckoutPage() {
         <div className="text-center">
           <p className="text-gray-500 mb-4">No items to checkout.</p>
           <Button
-            className="bg-pink-500 hover:bg-pink-600 text-white"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground"
             onClick={() => router.push("/")}
           >
             Continue Shopping
@@ -228,7 +258,7 @@ export default function CheckoutPage() {
         onSuccess={handlePaymentSuccess}
         onFailure={handlePaymentFailure}
       />
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
+      <h1 className="font-display text-3xl font-semibold text-foreground mb-8">Checkout</h1>
       <form
         onSubmit={handleSubmit(onSubmit)}
         className="grid grid-cols-1 lg:grid-cols-3 gap-8"
@@ -241,6 +271,83 @@ export default function CheckoutPage() {
             paymentMethod={paymentMethod}
             onPaymentMethodChange={setPaymentMethod}
           />
+
+          {/* Queen's Circle Points Redemption */}
+          {loyaltyPreview && loyaltyPreview.availablePoints >= 10 && loyaltyPreview.discountInr > 0 && (
+            <Card className="border-amber-200/80 bg-amber-50/40">
+              <CardContent className="p-4 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-amber-100 p-2 text-amber-700 mt-0.5">
+                    <Crown className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      Redeem Queen&apos;s Circle Rewards
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Use {loyaltyPreview.redeemablePoints} of your {loyaltyPreview.availablePoints} pts to save{" "}
+                      <span className="font-semibold text-amber-800">₹{loyaltyPreview.discountInr}</span>{" "}
+                      ({loyaltyPreview.conversionLabel})
+                    </p>
+                  </div>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer flex-shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={redeemPoints}
+                    onChange={(e) => setRedeemPoints(e.target.checked)}
+                    className="h-4 w-4 rounded border-amber-400 text-primary focus:ring-primary"
+                  />
+                  Apply
+                </label>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Festive Silk Gift Wrap & Personal Note */}
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-primary/10 p-2 text-primary mt-0.5">
+                    <Gift className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      Festive Silk Gift Wrap (+₹{GIFT_WRAP_FEE})
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Hand-wrapped in Kora silk pouch with zari ribbon &amp; printed greeting card.
+                    </p>
+                  </div>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer flex-shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={giftWrap}
+                    onChange={(e) => setGiftWrap(e.target.checked)}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  />
+                  Add
+                </label>
+              </div>
+              {giftWrap && (
+                <div>
+                  <label htmlFor="gift-note" className="block text-xs font-medium text-muted-foreground mb-1">
+                    Personal Gift Note (optional, max 240 chars)
+                  </label>
+                  <textarea
+                    id="gift-note"
+                    value={giftNote}
+                    onChange={(e) => setGiftNote(e.target.value.slice(0, 240))}
+                    rows={2}
+                    placeholder="Wishing you joy and radiance on this special occasion..."
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <div>
@@ -253,6 +360,9 @@ export default function CheckoutPage() {
             couponError={couponError}
             isApplyingCoupon={isApplyingCoupon}
             appliedCoupon={appliedCoupon}
+            loyaltyDiscount={loyaltyDiscountAmount}
+            redeemedPoints={loyaltyPointsToUse}
+            giftWrapFee={giftWrapFee}
             isProcessing={isProcessing}
             paymentMethod={paymentMethod}
             onCouponCodeChange={setCouponCode}

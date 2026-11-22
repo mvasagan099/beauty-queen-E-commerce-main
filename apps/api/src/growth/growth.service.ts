@@ -111,12 +111,17 @@ export class GrowthService {
       .catch(() => null);
     const meta = (stored?.value as {
       bonusPoints?: number;
+      redeemedPoints?: number;
       referralsClaimed?: number;
       appliedReferralCode?: string | null;
+      redeemedCheckouts?: string[];
     }) || {};
 
     const orderPoints = Math.floor(lifetimeSpend / 10);
-    const points = orderPoints + Number(meta.bonusPoints || 0);
+    const points = Math.max(
+      0,
+      orderPoints + Number(meta.bonusPoints || 0) - Number(meta.redeemedPoints || 0),
+    );
 
     let tier: LoyaltySummary['tier'] = 'Rose';
     let nextTier: string | null = 'Gold';
@@ -141,6 +146,82 @@ export class GrowthService {
       referralCode: this.buildReferralCode(userId),
       referralsClaimed: Number(meta.referralsClaimed || 0),
       appliedReferralCode: meta.appliedReferralCode || null,
+    };
+  }
+
+  async previewPointsRedemption(userId: number, subtotal: number) {
+    const summary = await this.getLoyaltySummary(userId);
+    const safeSubtotal = Math.max(0, Number(subtotal) || 0);
+    const maxCapInr = Math.floor(safeSubtotal * 0.15);
+    const maxFromPointsInr = Math.floor(summary.points / 10);
+    const discountInr = Math.max(0, Math.min(maxCapInr, maxFromPointsInr));
+    const redeemablePoints = discountInr * 10;
+
+    return {
+      availablePoints: summary.points,
+      redeemablePoints,
+      discountInr,
+      maxCapInr,
+      conversionLabel: '10 pts = ₹1 (up to 15% of order subtotal)',
+    };
+  }
+
+  async redeemPointsForCheckout(
+    userId: number,
+    subtotal: number,
+    checkoutId: string,
+  ): Promise<{ pointsRedeemed: number; discountInr: number }> {
+    const preview = await this.previewPointsRedemption(userId, subtotal);
+    if (preview.redeemablePoints <= 0 || preview.discountInr <= 0) {
+      return { pointsRedeemed: 0, discountInr: 0 };
+    }
+
+    const cfgKey = `loyalty:user:${userId}`;
+    const stored = await this.prisma.siteConfig
+      .findUnique({ where: { key: cfgKey } })
+      .catch(() => null);
+    const meta = ((stored?.value as any) || {}) as {
+      bonusPoints?: number;
+      redeemedPoints?: number;
+      referralsClaimed?: number;
+      appliedReferralCode?: string | null;
+      redeemedCheckouts?: string[];
+    };
+
+    const existingCheckouts = Array.isArray(meta.redeemedCheckouts)
+      ? meta.redeemedCheckouts
+      : [];
+    if (existingCheckouts.includes(checkoutId)) {
+      return { pointsRedeemed: 0, discountInr: 0 };
+    }
+
+    await this.prisma.siteConfig.upsert({
+      where: { key: cfgKey },
+      update: {
+        value: {
+          ...meta,
+          redeemedPoints: Number(meta.redeemedPoints || 0) + preview.redeemablePoints,
+          redeemedCheckouts: [...existingCheckouts.slice(-50), checkoutId],
+        } as any,
+      },
+      create: {
+        key: cfgKey,
+        value: {
+          bonusPoints: 0,
+          redeemedPoints: preview.redeemablePoints,
+          referralsClaimed: 0,
+          appliedReferralCode: null,
+          redeemedCheckouts: [checkoutId],
+        } as any,
+      },
+    });
+
+    this.logger.log(
+      `User ${userId} redeemed ${preview.redeemablePoints} Queen's Circle pts (₹${preview.discountInr}) on checkout ${checkoutId}`,
+    );
+    return {
+      pointsRedeemed: preview.redeemablePoints,
+      discountInr: preview.discountInr,
     };
   }
 
@@ -294,4 +375,74 @@ export class GrowthService {
       recommendations: products,
     };
   }
+
+  // ─── Product Color / Shade Swatch Variants ─────────────────────
+
+  async getProductSwatches(
+    productId: number,
+    category?: string,
+  ): Promise<ProductSwatch[]> {
+    const key = `product:swatches:${productId}`;
+    const stored = await this.prisma.siteConfig
+      .findUnique({ where: { key } })
+      .catch(() => null);
+
+    if (Array.isArray(stored?.value) && (stored.value as any[]).length > 0) {
+      return stored.value as unknown as ProductSwatch[];
+    }
+
+    const cat = (category || '').toLowerCase();
+    if (cat.includes('cosmetic')) {
+      return [
+        { id: 'kumkum', name: 'Madras Kumkum', hex: '#A81C44', inStock: true },
+        { id: 'sindoor', name: 'Royal Sindoor', hex: '#9B1D2C', inStock: true },
+        { id: 'rosewood', name: 'Rosewood Velvet', hex: '#9E4B5B', inStock: true },
+        { id: 'chai-nude', name: 'Spiced Chai Nude', hex: '#A86D5B', inStock: true },
+      ];
+    }
+    if (cat.includes('saree')) {
+      return [
+        { id: 'crimson-zari', name: 'Kanjeevaram Crimson', hex: '#A81C44', inStock: true },
+        { id: 'temple-gold', name: 'Temple Zari Gold', hex: '#D4A353', inStock: true },
+        { id: 'peacock-emerald', name: 'Peacock Emerald', hex: '#145A4A', inStock: true },
+      ];
+    }
+    return [
+      { id: 'kora-ivory', name: 'Kora Silk Ivory', hex: '#EDE2D3', inStock: true },
+      { id: 'kumkum-rose', name: 'Kumkum Rose', hex: '#A81C44', inStock: true },
+      { id: 'plum-lacquer', name: 'Kajal Plum', hex: '#3B1824', inStock: true },
+    ];
+  }
+
+  async saveProductSwatches(
+    productId: number,
+    swatches: ProductSwatch[],
+  ): Promise<ProductSwatch[]> {
+    if (!Array.isArray(swatches) || swatches.length === 0) {
+      throw new BadRequestException('At least one swatch is required');
+    }
+    const sanitized: ProductSwatch[] = swatches.slice(0, 12).map((s, idx) => ({
+      id: (s.id || `swatch-${idx + 1}`).trim().toLowerCase().replace(/[^a-z0-9-_]/g, ''),
+      name: (s.name || `Shade ${idx + 1}`).trim().slice(0, 60),
+      hex: /^#[0-9a-fA-F]{6}$/.test(s.hex || '') ? s.hex : '#A81C44',
+      image: s.image ? String(s.image).trim().slice(0, 300) : null,
+      inStock: s.inStock !== false,
+    }));
+
+    const key = `product:swatches:${productId}`;
+    await this.prisma.siteConfig.upsert({
+      where: { key },
+      update: { value: sanitized as any },
+      create: { key, value: sanitized as any },
+    });
+    return sanitized;
+  }
+}
+
+export interface ProductSwatch {
+  id: string;
+  name: string;
+  hex: string;
+  image?: string | null;
+  inStock?: boolean;
 }

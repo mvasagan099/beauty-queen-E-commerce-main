@@ -266,6 +266,9 @@ export const paymentsApi = {
     source: "cart" | "buynow";
     buynowItem?: { productId: number; size: string; quantity: number };
     couponCode?: string;
+    redeemPoints?: boolean;
+    giftWrap?: boolean;
+    giftNote?: string;
     name: string;
     email: string;
     phone: string;
@@ -522,8 +525,18 @@ export const reviewsApi = {
   getMyReviews: () => api.get("/reviews/my"),
   canReview: (productId: number) =>
     api.get(`/reviews/product/${productId}/can-review`),
-  create: (data: { productId: number; rating: number; comment?: string; title?: string }) =>
-    api.post("/reviews", data),
+  uploadPhoto: (file: File) => {
+    const fd = new FormData();
+    fd.append("photo", file);
+    return api.upload<{ success: boolean; url: string }>("/reviews/upload-photo", fd);
+  },
+  create: (data: {
+    productId: number;
+    rating: number;
+    comment?: string;
+    title?: string;
+    photos?: string[];
+  }) => api.post("/reviews", data),
   update: (id: number, data: { rating?: number; comment?: string; title?: string }) =>
     api.patch(`/reviews/${id}`, data),
   delete: (id: number) => api.delete(`/reviews/${id}`),

@@ -1,19 +1,65 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ImageService } from '../common/image.service';
 import { ReviewStatus } from '@prisma/client';
 
 @Injectable()
 export class ReviewsService {
   private readonly logger = new Logger(ReviewsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private imageService?: ImageService,
+  ) {}
+
+  private sanitizePhotos(photos?: string[]): string[] {
+    if (!Array.isArray(photos)) return [];
+    return photos
+      .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+      .map((p) => p.trim().slice(0, 300))
+      .filter((p) => p.startsWith('/uploads/') || p.startsWith('https://') || p.startsWith('http://'))
+      .slice(0, 3);
+  }
+
+  private async attachPhotos<T extends { id: number }>(reviews: T[]): Promise<(T & { photos: string[] })[]> {
+    if (!reviews.length) return [];
+    const keys = reviews.map((r) => `review:photos:${r.id}`);
+    const configs = await this.prisma.siteConfig
+      .findMany({ where: { key: { in: keys } } })
+      .catch(() => []);
+    const map = new Map<string, string[]>();
+    for (const cfg of configs) {
+      if (Array.isArray(cfg.value)) {
+        map.set(cfg.key, cfg.value as string[]);
+      }
+    }
+    return reviews.map((r) => ({
+      ...r,
+      photos: map.get(`review:photos:${r.id}`) || [],
+    }));
+  }
+
+  async uploadReviewPhoto(file: Express.Multer.File): Promise<{ success: boolean; url: string }> {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('Image file is required');
+    }
+    if (!this.imageService) {
+      throw new BadRequestException('Image upload service unavailable');
+    }
+    const [savedUrl] = await this.imageService.processImages([file]);
+    return {
+      success: true,
+      url: savedUrl,
+    };
+  }
 
   async getByProduct(productId: number) {
-    const reviews = await this.prisma.review.findMany({
+    const rawReviews = await this.prisma.review.findMany({
       where: { productId, status: ReviewStatus.APPROVED },
       include: { user: { select: { id: true, name: true, email: true } } },
       orderBy: { createdAt: 'desc' },
     });
+    const reviews = await this.attachPhotos(rawReviews);
 
     const avgRating = reviews.length
       ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
@@ -23,11 +69,12 @@ export class ReviewsService {
   }
 
   async getByProductAdmin(productId: number) {
-    const reviews = await this.prisma.review.findMany({
+    const rawReviews = await this.prisma.review.findMany({
       where: { productId },
       include: { user: { select: { id: true, name: true, email: true } } },
       orderBy: { createdAt: 'desc' },
     });
+    const reviews = await this.attachPhotos(rawReviews);
 
     const avgRating = reviews.length
       ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
@@ -37,16 +84,24 @@ export class ReviewsService {
   }
 
   async getMyReviews(userId: number) {
-    return this.prisma.review.findMany({
+    const rawReviews = await this.prisma.review.findMany({
       where: { userId },
       include: {
         product: { select: { id: true, name: true, image: true, price: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
+    return this.attachPhotos(rawReviews);
   }
 
-  async create(userId: number, productId: number, rating: number, comment?: string, title?: string) {
+  async create(
+    userId: number,
+    productId: number,
+    rating: number,
+    comment?: string,
+    title?: string,
+    photos?: string[],
+  ) {
     const product = await this.prisma.product.findFirst({
       where: { id: productId, deletedAt: null },
     });
@@ -79,8 +134,24 @@ export class ReviewsService {
       include: { user: { select: { id: true, name: true, email: true } } },
     });
 
-    this.logger.log(`Review created by user ${userId} for product ${productId} (verified: ${verifiedPurchase})`);
-    return { success: true, message: 'Review created', review, verifiedPurchase };
+    const cleanPhotos = this.sanitizePhotos(photos);
+    if (cleanPhotos.length > 0) {
+      await this.prisma.siteConfig
+        .upsert({
+          where: { key: `review:photos:${review.id}` },
+          update: { value: cleanPhotos as any },
+          create: { key: `review:photos:${review.id}`, value: cleanPhotos as any },
+        })
+        .catch(() => undefined);
+    }
+
+    this.logger.log(`Review created by user ${userId} for product ${productId} (verified: ${verifiedPurchase}, photos: ${cleanPhotos.length})`);
+    return {
+      success: true,
+      message: 'Review created',
+      review: { ...review, photos: cleanPhotos },
+      verifiedPurchase,
+    };
   }
 
   async update(userId: number, reviewId: number, data: { rating?: number; comment?: string; title?: string }) {

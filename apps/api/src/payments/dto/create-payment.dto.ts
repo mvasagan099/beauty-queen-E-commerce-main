@@ -5,6 +5,8 @@ import {
   IsEnum,
   IsObject,
   IsNumber,
+  IsBoolean,
+  MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -26,6 +28,22 @@ export class CreateCheckoutDto {
   @IsString()
   @IsOptional()
   couponCode?: string;
+
+  @ApiPropertyOptional({ example: true, description: "Redeem eligible Queen's Circle loyalty points" })
+  @IsBoolean()
+  @IsOptional()
+  redeemPoints?: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Add festive silk gift wrap (+₹49)' })
+  @IsBoolean()
+  @IsOptional()
+  giftWrap?: boolean;
+
+  @ApiPropertyOptional({ example: 'Wishing you a radiant Diwali!' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(240)
+  giftNote?: string;
 
   @ApiProperty({ example: 'John Doe' })
   @IsString()

@@ -180,6 +180,7 @@ export interface Review {
   comment: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED";
   isVerifiedPurchase?: boolean;
+  photos?: string[];
   createdAt: string;
   updatedAt?: string;
   user?: { id: number; name: string | null; email: string };

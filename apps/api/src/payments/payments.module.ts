@@ -9,6 +9,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { PricingModule } from '../pricing/pricing.module';
 import { CouponsModule } from '../coupons/coupons.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { GrowthModule } from '../growth/growth.module';
 import { RateLimitGuard } from '../common/rate-limit.guard';
 
 @Module({
@@ -19,6 +20,7 @@ import { RateLimitGuard } from '../common/rate-limit.guard';
     PricingModule,
     CouponsModule,
     InventoryModule,
+    GrowthModule,
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService, RazorpayService, WebhookService, RateLimitGuard],

@@ -19,6 +19,7 @@ import { RelatedProducts } from "@/components/product/RelatedProducts";
 import { FrequentlyBoughtTogether } from "@/components/product/FrequentlyBoughtTogether";
 import { RecentlyViewed } from "@/components/product/RecentlyViewed";
 import { ProductGallery } from "@/components/product/product-gallery";
+import { ProductSwatches, ProductSwatch } from "@/components/product/ProductSwatches";
 import { SizeGuideModal } from "@/components/product/SizeGuideModal";
 import { PincodeChecker } from "@/components/product/PincodeChecker";
 import { recordRecentlyViewed } from "@/lib/recently-viewed";
@@ -55,6 +56,7 @@ export default function ProductDetailView({
 }: ProductDetailViewProps) {
   const id = productId;
   const [selectedSize, setSelectedSize] = useState("");
+  const [selectedSwatch, setSelectedSwatch] = useState<ProductSwatch | null>(null);
   const [quantity, setQuantity] = useState(1);
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -270,7 +272,11 @@ const wishlistMutation = useMutation({
     (s) => p[s.key] != null && (p[s.key] as number) > 0
   );
 
-  const images = [p.image, p.image1, p.image2, p.image3, p.image4].filter(Boolean);
+  const baseImages = [p.image, p.image1, p.image2, p.image3, p.image4].filter(Boolean);
+  const images =
+    selectedSwatch?.image && !baseImages.includes(selectedSwatch.image)
+      ? [selectedSwatch.image, ...baseImages]
+      : baseImages;
 
   return (
     <div className="container-page py-8">
@@ -322,6 +328,13 @@ const wishlistMutation = useMutation({
           {p.description && (
             <p className="text-muted-foreground leading-relaxed whitespace-pre-line">{p.description}</p>
           )}
+
+          <ProductSwatches
+            productId={id}
+            category={p.ptype}
+            selectedSwatch={selectedSwatch}
+            onSelect={setSelectedSwatch}
+          />
 
           {availableSizes.length > 0 ? (
             <div>

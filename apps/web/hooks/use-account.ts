@@ -104,7 +104,7 @@ export function useCanReview(productId: number, enabled = true) {
 export function useCreateReview() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { productId: number; rating: number; comment?: string; title?: string }) =>
+    mutationFn: (data: { productId: number; rating: number; comment?: string; title?: string; photos?: string[] }) =>
       reviewsApi.create(data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["reviews", variables.productId] });

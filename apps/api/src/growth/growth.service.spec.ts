@@ -88,4 +88,38 @@ describe('GrowthService', () => {
       }),
     );
   });
+
+  it('caps Queen’s Circle points redemption at 15% of subtotal and deducts idempotently', async () => {
+    // 20,000 spend => 2,000 points (= ₹200 max from points), subtotal ₹1,000 => 15% cap = ₹150 (1,500 pts)
+    prisma.order.findMany.mockResolvedValue([{ totalAmount: 20000, subtotal: 20000 }]);
+
+    const preview = await service.previewPointsRedemption(12, 1000);
+    expect(preview.availablePoints).toBe(2000);
+    expect(preview.discountInr).toBe(150);
+    expect(preview.redeemablePoints).toBe(1500);
+
+    const redeemed = await service.redeemPointsForCheckout(12, 1000, 'chk-abc');
+    expect(redeemed).toEqual({ pointsRedeemed: 1500, discountInr: 150 });
+
+    // Remaining points after redemption should be 500
+    const after = await service.getLoyaltySummary(12);
+    expect(after.points).toBe(500);
+
+    // Duplicate redemption for same checkoutId is idempotent no-op
+    const dup = await service.redeemPointsForCheckout(12, 1000, 'chk-abc');
+    expect(dup).toEqual({ pointsRedeemed: 0, discountInr: 0 });
+  });
+
+  it('returns curated category default swatches and persists custom seller swatches', async () => {
+    const cosmeticsDefaults = await service.getProductSwatches(99, 'Cosmetics');
+    expect(cosmeticsDefaults.length).toBeGreaterThanOrEqual(4);
+    expect(cosmeticsDefaults[0].hex).toMatch(/^#[0-9A-F]{6}$/i);
+
+    const saved = await service.saveProductSwatches(99, [
+      { id: 'ruby', name: 'Madras Ruby', hex: '#A81C44', image: '/uploads/ruby.webp' },
+    ]);
+    expect(saved).toHaveLength(1);
+    const loaded = await service.getProductSwatches(99, 'Cosmetics');
+    expect(loaded[0].name).toBe('Madras Ruby');
+  });
 });
